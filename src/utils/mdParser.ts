@@ -1,11 +1,22 @@
 export function parseMarkdown(text: string): string {
-  text = text.replaceAll(/^### (.*$)/gm, "<h3>$1</h3>");
-  text = text.replaceAll(/^## (.*$)/gm, "<h2>$1</h2>");
-  text = text.replaceAll(/^# (.*$)/gm, "<h1>$1</h1>");
+  // Экранируем HTML спецсимволы
+  let html = text
+    .replaceAll(/&/g, "&amp;")
+    .replaceAll(/</g, "&lt;")
+    .replaceAll(/>/g, "&gt;");
 
-  text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  // Парсим заголовки
+  // Ищем символы до конца строки [^\n]*, а перенос (\n|$) съедаем при замене!
+  html = html.replaceAll(/^### ([^\n]*)(\n|$)/gm, "<h3>$1</h3>");
+  html = html.replaceAll(/^## ([^\n]*)(\n|$)/gm, "<h2>$1</h2>");
+  html = html.replaceAll(/^# ([^\n]*)(\n|$)/gm, "<h1>$1</h1>");
 
-  text = text.replace(/\n/g, "<br />");
+  // Парсим жирный текст
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 
-  return text;
+  // Безопасно меняем оставшиеся \n на <br />
+  // Теперь здесь нет переносов внутри или после заголовков
+  html = html.replace(/\n/g, "<br />");
+
+  return html;
 }
