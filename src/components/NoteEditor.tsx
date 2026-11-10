@@ -1,10 +1,22 @@
 import { useState } from "react";
 import { parseMarkdown } from "../utils/mdParser";
+import { useNotes } from "../store/useNotes";
 
 export function NoteEditor() {
   const [mode, setMode] = useState("Edit");
+  const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [mdown, setMdown] = useState("");
+
+  const noteId = useNotes((state) => state.activeNoteId);
+  if (!noteId) {
+    return (
+      <>
+        <div className="text-xl">Выберите заметку или создайте новую</div>
+      </>
+    );
+  }
+  
 
   const handleEdit = () => {
     setMode("Edit");
@@ -22,7 +34,8 @@ export function NoteEditor() {
             type="text"
             placeholder="Без названия"
             className="text-xl font-bold bg-transparent border-none outline-none focus:ring-0 w-1/2 placeholder-slate-400"
-            value="Моя новая заметка"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
           />
 
           <div className="flex items-center bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200">
