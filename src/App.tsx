@@ -1,12 +1,11 @@
 import './App.css'
+import { NoteEditor } from './components/NoteEditor'
 
 function App() {
 
   return (
     <>
-    <h1 className="text-3xl font-bold underline text-center">
-      Hello world!
-    </h1>
+      <NoteEditor/>
     </>
   )
 }

@@ -1,3 +1,4 @@
+// src/store/useNotes.ts
 import { create } from "zustand";
 
 interface NotesState {
