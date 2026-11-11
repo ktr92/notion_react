@@ -35,8 +35,15 @@ export const useNotes = create<NotesState>((set) => ({
   notes: [
     {
       id: "1",
-      title: "первая",
-      content: "## title2",
+      title: "первая ",
+      content: "## title1 [[2]]",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    },
+    {
+      id: "2",
+      title: "вторая",
+      content: "## title2 [[1]]",
       createdAt: Date.now(),
       updatedAt: Date.now(),
     },
@@ -79,7 +86,7 @@ export const useNotes = create<NotesState>((set) => ({
       }));
 
       return {
-        dependencies: [...deps, ...newDeps.filter(dep => dep.fromNoteId !== dep.toNoteId && state.notes.find(note => note.id === dep.toNoteId))],
+        dependencies: [...deps, ...newDeps.filter(dep => dep.fromNoteId !== dep.toNoteId && state.notes.some(note => note.id === dep.toNoteId))],
         notes: state.notes.map((note: Note) =>
           note.id === id ? { ...note, content, updatedAt: Date.now() } : note,
         ),

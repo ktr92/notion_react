@@ -10,12 +10,14 @@ export function NoteEditor() {
 
   const saveTitle = useNotes((state) => state.updateNoteTitle);
   const saveContent = useNotes((state) => state.updateNoteContent);
+  const changeNote = useNotes((state) => state.setActiveNoteId);
+  const notes = useNotes((state) => state.notes);
 
   const [mode, setMode] = useState<"Edit" | "Preview">("Edit");
   const [title, setTitle] = useState(note ? note.title : "");
   const [content, setContent] = useState(note ? note.content : "");
 
-  const isTyping = (title !== note?.title || content !== note?.content);
+  const isTyping = title !== note?.title || content !== note?.content;
 
   const handleEdit = () => {
     setMode("Edit");
@@ -28,6 +30,19 @@ export function NoteEditor() {
   };
   const handlePreview = () => {
     setMode("Preview");
+  };
+  const handlePreviewClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    const isbutton = target.closest("[data-note-id]") as HTMLElement;
+
+    if (isbutton) {
+      const linkId = isbutton.dataset.noteId;
+      if (linkId) {
+        if (notes.some((note) => note.id === linkId)) {
+          changeNote(linkId);
+        }
+      }
+    }
   };
 
   useEffect(() => {
@@ -42,9 +57,8 @@ export function NoteEditor() {
         if (content !== note?.content) {
           saveContent(noteId!, content);
         }
-
       }, 500);
-    } 
+    }
 
     return () => {
       clearTimeout(timeout);
@@ -150,8 +164,10 @@ export function NoteEditor() {
                 [&>h3]:text-xl [&>h3]:font-semibold [&>h3]:text-slate-600 [&>h3]:mt-0 [&>h3]:mb-2
                 [&>p]:mb-3
                 [&>strong]:font-semibold [&>strong]:text-slate-600
-                [&>br]:mb-2"
+                [&>br]:mb-2
+                [&_button]:text-blue-500"
               dangerouslySetInnerHTML={{ __html: parseMarkdown(content) }}
+              onClick={handlePreviewClick}
             ></div>
           )}
         </div>
