@@ -25,8 +25,16 @@ interface Note {
 }
 
 export const useNotes = create<NotesState>((set) => ({
-  notes: [],
-  activeNoteId: null,
+  notes: [
+    {
+      id: '1',
+      title: 'первая',
+      content: '## title2',
+      createdAt: Date.now(), 
+      updatedAt: Date.now()
+    }
+  ],
+  activeNoteId: '1',
   // Создает новую заметку с уникальным ID, дефолтным заголовком и пустым текстом. Добавляет её в список и сразу делает активной (activeNoteId).
   createNote: () =>
     set((state) => {

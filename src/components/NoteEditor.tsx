@@ -1,30 +1,59 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { parseMarkdown } from "../utils/mdParser";
 import { useNotes } from "../store/useNotes";
 
 export function NoteEditor() {
-  const [mode, setMode] = useState("Edit");
-  const [title, setTitle] = useState("");
-  const [text, setText] = useState("");
-  const [mdown, setMdown] = useState("");
-
   const noteId = useNotes((state) => state.activeNoteId);
-  if (!noteId) {
-    return (
-      <>
-        <div className="text-xl">Выберите заметку или создайте новую</div>
-      </>
-    );
-  }
-  
+  const note = useNotes((state) =>
+    state.notes.find((note) => note.id === noteId),
+  );
+
+  const saveTitle = useNotes((state) => state.updateNoteTitle);
+  const saveContent = useNotes((state) => state.updateNoteContent);
+
+  const [mode, setMode] = useState<"Edit" | "Preview">("Edit");
+  const [title, setTitle] = useState(note ? note.title : "");
+  const [content, setContent] = useState(note ? note.content : "");
+
+  const isTyping = (title !== note?.title || content !== note?.content);
 
   const handleEdit = () => {
     setMode("Edit");
   };
+  const handleChangeTitle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTitle(e.target.value);
+  };
+  const handleChangeText = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setContent(e.target.value);
+  };
   const handlePreview = () => {
     setMode("Preview");
-    setMdown(parseMarkdown(text));
   };
+
+  useEffect(() => {
+    if (!noteId) return;
+
+    let timeout: ReturnType<typeof setTimeout>;
+    if (title !== note?.title || content !== note?.content) {
+      timeout = setTimeout(() => {
+        if (title !== note?.title) {
+          saveTitle(noteId!, title);
+        }
+        if (content !== note?.content) {
+          saveContent(noteId!, content);
+        }
+
+      }, 500);
+    } 
+
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [title, content]);
+
+  if (!noteId) {
+    return <div>Такой заметки нет... Создайте новую заметку.</div>;
+  }
 
   return (
     <>
@@ -35,7 +64,7 @@ export function NoteEditor() {
             placeholder="Без названия"
             className="text-xl font-bold bg-transparent border-none outline-none focus:ring-0 w-1/2 placeholder-slate-400"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={handleChangeTitle}
           />
 
           <div className="flex items-center bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200">
@@ -49,11 +78,11 @@ export function NoteEditor() {
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
-                stroke-width="2"
+                strokeWidth="2"
               >
                 <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                   d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
                 />
               </svg>
@@ -70,16 +99,16 @@ export function NoteEditor() {
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
-                stroke-width="2"
+                strokeWidth="2"
               >
                 <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                   d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                 />
                 <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                   d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
                 />
               </svg>
@@ -92,21 +121,24 @@ export function NoteEditor() {
           {mode === "Edit" && (
             <div className="flex-1 flex flex-col p-6 min-h-0">
               <textarea
-                value={text}
-                onChange={(e) => {
-                  setText(e.target.value);
-                }}
+                value={content}
+                onChange={handleChangeText}
                 placeholder="Начните писать здесь в формате Markdown..."
                 className="flex-1 w-full resize-none border-none outline-none focus:ring-0 p-0 text-slate-700 font-mono text-base leading-relaxed placeholder-slate-400 focus:outline-none"
-              >
-                # Заголовок заметки Это пример текста с **жирным выделением** и
-                ссылкой на другую заметку [[another-note-id]].
-              </textarea>
+              ></textarea>
 
-              <div className="flex justify-end items-center space-x-2 text-xs text-slate-400 font-mono pt-3 border-t border-slate-100">
-                <span className="inline-block w-2 h-2 bg-amber-400 rounded-full animate-pulse"></span>
-                <span>Печатает (ожидание сохранения...)</span>
-              </div>
+              {isTyping && (
+                <div className="flex justify-end items-center space-x-2 text-xs text-slate-400 font-mono pt-3 border-t border-slate-100">
+                  <span className="inline-block w-2 h-2 bg-amber-400 rounded-full animate-pulse"></span>
+                  <span>Печатает (ожидание сохранения...)</span>
+                </div>
+              )}
+              {!isTyping && (
+                <div className="flex justify-end items-center space-x-2 text-xs text-slate-400 font-mono pt-3 border-t border-slate-100">
+                  <span className="inline-block w-2 h-2 bg-green-400 rounded-full"></span>
+                  <span>Сохранено</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -119,7 +151,7 @@ export function NoteEditor() {
                 [&>p]:mb-3
                 [&>strong]:font-semibold [&>strong]:text-slate-600
                 [&>br]:mb-2"
-              dangerouslySetInnerHTML={{ __html: mdown }}
+              dangerouslySetInnerHTML={{ __html: parseMarkdown(content) }}
             ></div>
           )}
         </div>
