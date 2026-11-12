@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/refs */
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { useNotes } from "../store/useNotes";
 
 interface Coordinates {
@@ -7,11 +7,19 @@ interface Coordinates {
   y: number;
 }
 
-export const KnowledgeGraph = function () {
+interface Drag {
+  noteId: string;
+  startX: Coordinates["x"];
+  startY: Coordinates["y"];
+  initialNodeX: Coordinates["x"];
+  initialNodeY: Coordinates["y"];
+  hasMoved: boolean;
+}
+
+export const KnowledgeGraph = function ({ onChangeTab }) {
   const notes = useNotes((state) => state.notes);
   const dependencies = useNotes((state) => state.dependencies);
   const setActiveNoteId = useNotes((state) => state.setActiveNoteId);
-
   const coordsRef = useRef<Record<string, Coordinates>>({});
   const nodeRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const edgeRefs = useRef<Record<string, SVGLineElement | null>>({});
@@ -25,6 +33,58 @@ export const KnowledgeGraph = function () {
       };
     }
   });
+
+  const dragRef = useRef<Drag | null>(null);
+
+  function handlePointerDown(event: React.PointerEvent<HTMLDivElement>, noteId: string) {
+    dragRef.current = {
+      noteId: noteId,
+      startX: event.clientX,
+      startY: event.clientY,
+      initialNodeX: coordsRef.current[noteId].x,
+      initialNodeY: coordsRef.current[noteId].y,
+      hasMoved: false,
+    };
+    nodeRefs.current[noteId]?.setPointerCapture(event.pointerId);
+  }
+
+  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>, noteId: string) {
+    if (!dragRef.current || !dragRef.current.noteId) return;
+    const dx = event.clientX - dragRef.current.startX;
+    const dy = event.clientY - dragRef.current.startY;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+      dragRef.current.hasMoved = true;
+    }
+      const newX = dx + dragRef.current.initialNodeX;
+      const newY = dy + dragRef.current.initialNodeY;
+
+      coordsRef.current[noteId].x = newX;
+      coordsRef.current[noteId].y = newY;
+
+      nodeRefs.current[noteId].style.transform =
+        `translate3d(${newX}px, ${newY}px, 0)`;
+
+      dependencies.forEach((dep) => {
+        if (dep.fromNoteId === noteId) {
+          edgeRefs.current[`${dep.fromNoteId}-${dep.toNoteId}`]?.setAttribute("x1", String(newX + 80));
+          edgeRefs.current[`${dep.fromNoteId}-${dep.toNoteId}`]?.setAttribute("y1", String(newY + 24));
+        }
+        if (dep.toNoteId === noteId) {
+          edgeRefs.current[`${dep.fromNoteId}-${dep.toNoteId}`]?.setAttribute("x2", String(newX + 80));
+          edgeRefs.current[`${dep.fromNoteId}-${dep.toNoteId}`]?.setAttribute("y2", String(newY + 24));
+        }
+      });
+    
+  }
+
+  function handlePointerUp(event: React.PointerEvent<HTMLDivElement>, noteId: string) {
+    nodeRefs.current[noteId]?.releasePointerCapture(event.pointerId);
+    dragRef.current.noteId = null;
+    if (!dragRef.current?.hasMoved) {
+      setActiveNoteId(noteId);
+      onChangeTab('editor')
+    }
+  }
 
   return (
     <>
@@ -61,6 +121,9 @@ export const KnowledgeGraph = function () {
             ref={(el) => {
               nodeRefs.current[note.id] = el;
             }}
+            onPointerDown={(e) => handlePointerDown(e, note.id)}
+            onPointerMove={(e) => handlePointerMove(e, note.id)}
+            onPointerUp={(e) => handlePointerUp(e, note.id)}
           >
             {note.title}
           </div>

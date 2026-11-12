@@ -62,7 +62,7 @@ function App() {
 
         <main className="flex-1 flex flex-col min-w-0 h-full">
           {tab === "editor" && <NoteEditor key={activeNoteId} />}
-          {tab === "graph" && <KnowledgeGraph />}
+          {tab === "graph" && <KnowledgeGraph onChangeTab={setTab} />}
         </main>
       </div>
     </>

@@ -31,23 +31,50 @@ interface Dependency {
   toNoteId: Note["id"];
 }
 
+const INITIAL_NOTES = [
+  {
+    id: "1",
+    title: "первая ",
+    content: "## title1 [[2]] [[3]]",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  },
+  {
+    id: "2",
+    title: "вторая",
+    content: "## title2 [[1]]",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  },
+  {
+    id: "3",
+    title: "третья",
+    content: "## title2 [[1]]",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  },
+];
+
+const DEPS: Dependency[] = INITIAL_NOTES.flatMap((note) => {
+  const links = extractLinks(note.content);
+  const noteDeps: Dependency[] = links.map((link) => ({
+    fromNoteId: note.id,
+    toNoteId: link,
+  }));
+
+  const filtered = noteDeps.filter(
+    (dep) =>
+      dep.fromNoteId !== dep.toNoteId &&
+      INITIAL_NOTES.some((note) => note.id === dep.toNoteId),
+  );
+
+  return filtered;
+});
+
 export const useNotes = create<NotesState>((set) => ({
-  notes: [
-    {
-      id: "1",
-      title: "первая ",
-      content: "## title1 [[2]]",
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    },
-    {
-      id: "2",
-      title: "вторая",
-      content: "## title2 [[1]]",
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    },
-  ],
+  notes: INITIAL_NOTES,
+  dependencies: DEPS,
+
   activeNoteId: "1",
   // Создает новую заметку с уникальным ID, дефолтным заголовком и пустым текстом. Добавляет её в список и сразу делает активной (activeNoteId).
   createNote: () =>
@@ -86,7 +113,14 @@ export const useNotes = create<NotesState>((set) => ({
       }));
 
       return {
-        dependencies: [...deps, ...newDeps.filter(dep => dep.fromNoteId !== dep.toNoteId && state.notes.some(note => note.id === dep.toNoteId))],
+        dependencies: [
+          ...deps,
+          ...newDeps.filter(
+            (dep) =>
+              dep.fromNoteId !== dep.toNoteId &&
+              state.notes.some((note) => note.id === dep.toNoteId),
+          ),
+        ],
         notes: state.notes.map((note: Note) =>
           note.id === id ? { ...note, content, updatedAt: Date.now() } : note,
         ),
@@ -97,8 +131,8 @@ export const useNotes = create<NotesState>((set) => ({
     set((state) => ({
       activeNoteId: state.activeNoteId === id ? null : state.activeNoteId,
       notes: state.notes.filter((note) => note.id !== id),
-      dependencies: state.dependencies.filter((dep) => dep.fromNoteId !== id && dep.toNoteId !== id)
+      dependencies: state.dependencies.filter(
+        (dep) => dep.fromNoteId !== id && dep.toNoteId !== id,
+      ),
     })),
-
-  dependencies: [],
 }));
