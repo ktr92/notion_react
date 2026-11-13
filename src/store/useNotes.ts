@@ -118,28 +118,53 @@ export const useNotes = create<NotesState>((set, get) => ({
         dependencies: formattedDependencies,
       });
     } catch (error) {
-      console.log(error)
+      console.log(error);
     } finally {
       set({ isLoadingNotes: false });
     }
   },
   // Создает новую заметку с уникальным ID, дефолтным заголовком и пустым текстом. Добавляет её в список и сразу делает активной (activeNoteId).
-  createNote: () =>
-    set((state) => {
-      const id = crypto.randomUUID();
-      const now = Date.now();
-      const newNote = {
-        id,
-        title: "",
-        content: "",
-        createdAt: now,
-        updatedAt: now,
-      };
-      return {
-        notes: [newNote, ...state.notes],
-        activeNoteId: id,
-      };
-    }),
+  createNote: async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return;
+    const id = crypto.randomUUID();
+    const now = Date.now();
+
+    const prevNotes = get().notes;
+    const prevActiveId = get().activeNoteId
+
+    const newNote = {
+      id,
+      title: "",
+      content: "",
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    set((state) => ({
+      notes: [newNote, ...state.notes],
+      activeNoteId: id,
+    }));
+
+    // Фоновый запрос в Supabase
+    try {
+      const { error } = await supabase.from("notes").insert({
+        id: newNote.id,
+        user_id: session.user.id,
+        title: newNote.title,
+        content: newNote.content,
+        created_at: newNote.createdAt,
+        updated_at: newNote.updatedAt,
+      });
+      if (error) {
+        set({ notes: prevNotes, activeNoteId: prevActiveId });
+      }
+    } catch (error) {
+      set({ notes: prevNotes, activeNoteId: prevActiveId  });
+      console.log(error)
+    }
+  },
+
   // Принимает ID заметки и переключает на неё фокус редактора.
   setActiveNoteId: (id: string) => set(() => ({ activeNoteId: id })),
   // Принимает ID и новую строку. Находит нужную заметку, обновляет ей заголовок и поле updatedAt.
