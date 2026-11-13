@@ -14,6 +14,7 @@ function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
+  const fetchNotes = useNotes(state => state.fetchNotes)
   const activeNoteId = useNotes((state) => state.activeNoteId);
   const [tab, setTab] = useState<"editor" | "graph">("editor");
 
@@ -39,6 +40,10 @@ function App() {
       data.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    fetchNotes()
+  }, [fetchNotes, session?.user.id])
 
   useEffect(() => {
     function hashSync() {
@@ -84,6 +89,12 @@ function App() {
 
   return (
     <>
+      {isLoadingAuth && <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 select-none">
+      <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-3" />
+      <p className="text-sm font-medium text-slate-500 animate-pulse">
+        Проверка сессии...
+      </p>
+    </div>}
       {!isLoadingAuth && !session && <Auth />}
       {session && <div className="flex h-screen w-screen overflow-hidden bg-slate-100 text-slate-800 font-sans antialiased">
         <aside className="w-72 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col">

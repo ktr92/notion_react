@@ -66,7 +66,7 @@ export function NoteEditor() {
   }, [title, content]);
 
   if (!noteId) {
-    return <div>Такой заметки нет... Создайте новую заметку.</div>;
+    return <div className="p-4">Такой заметки нет... Создайте новую заметку.</div>;
   }
 
   return (
