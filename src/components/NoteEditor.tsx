@@ -2,21 +2,35 @@ import { useEffect, useState } from "react";
 import { parseMarkdown } from "../utils/mdParser";
 import { useNotes } from "../store/useNotes";
 
+/**
+ * Компонент редактора и предпросмотра заметок.
+ * Важная архитектурная особенность: в App.tsx этот компонент рендерится с пропсом key={activeNoteId}.
+ * Благодаря этому при переключении на другую заметку React полностью пересоздает компонент с нуля,
+ * и локальные стейты title/content автоматически инициализируются данными новой заметки без лишних useEffect.
+ */
 export function NoteEditor() {
+  // Достаем ID активной заметки и находим её актуальную версию в глобальном сторе Zustand
   const noteId = useNotes((state) => state.activeNoteId);
   const note = useNotes((state) =>
     state.notes.find((note) => note.id === noteId),
   );
 
+  // Экшены стора для сохранения изменений и навигации по вики-ссылкам
   const saveTitle = useNotes((state) => state.updateNoteTitle);
   const saveContent = useNotes((state) => state.updateNoteContent);
   const changeNote = useNotes((state) => state.setActiveNoteId);
   const notes = useNotes((state) => state.notes);
 
+  // Режим отображения: "Edit" (редактирование) или "Preview" (рендер HTML из Markdown)
   const [mode, setMode] = useState<"Edit" | "Preview">("Edit");
+
+  // Изолированные локальные стейты для ввода текста:
+  // нужны для того, чтобы при каждом нажатии клавиши не обновлять глобальный стор
+  // и не запускать тяжелый пересчет связей графа и запросы в Supabase.
   const [title, setTitle] = useState(note ? note.title : "");
   const [content, setContent] = useState(note ? note.content : "");
 
+  // Вычисляемое состояние (Derived State): true, пока локальный текст отличается от сохраненного в сторе
   const isTyping = title !== note?.title || content !== note?.content;
 
   const handleEdit = () => {
@@ -31,6 +45,11 @@ export function NoteEditor() {
   const handlePreview = () => {
     setMode("Preview");
   };
+
+  // Делегирование кликов (Event Delegation) в режиме Preview:
+  // парсер превращает [[ID]] в кнопки <button data-note-id="...">.
+  // Вместо навешивания обработчиков на каждую кнопку, мы ловим всплывающий клик на общем контейнере,
+  // ищем ближайший элемент с атрибутом data-note-id и переключаем активную заметку (SPA-переход).
   const handlePreviewClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     const isbutton = target.closest("[data-note-id]") as HTMLElement;
@@ -38,6 +57,7 @@ export function NoteEditor() {
     if (isbutton) {
       const linkId = isbutton.dataset.noteId;
       if (linkId) {
+        // Проверяем, что заметка с таким ID реально существует, чтобы не открыть пустой экран
         if (notes.some((note) => note.id === linkId)) {
           changeNote(linkId);
         }
@@ -45,6 +65,10 @@ export function NoteEditor() {
     }
   };
 
+  // Механика автосохранения с дебаунсом (Debounce 500 мс):
+  // при каждом изменении title или content запускается таймер на 500 мс.
+  // Если пользователь продолжает печатать, cleanup-функция отменяет предыдущий таймер.
+  // Отправка в Zustand (и далее в Supabase) происходит только через 0.5 сек после паузы в наборе текста.
   useEffect(() => {
     if (!noteId) return;
 
@@ -65,6 +89,7 @@ export function NoteEditor() {
     };
   }, [title, content]);
 
+  // Заглушка на случай, если заметка не выбрана или была удалена
   if (!noteId) {
     return <div className="p-4">Такой заметки нет... Создайте новую заметку.</div>;
   }
@@ -72,6 +97,7 @@ export function NoteEditor() {
   return (
     <>
       <div className="flex flex-col h-full bg-slate-50 text-slate-800 font-sans antialiased">
+        {/* Верхняя панель редактора: поле заголовка и переключатель режимов Edit / Preview */}
         <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3 shadow-sm">
           <input
             type="text"
@@ -131,6 +157,7 @@ export function NoteEditor() {
           </div>
         </div>
 
+        {/* Основная рабочая область редактора */}
         <div className="flex-1 flex flex-col min-h-0 bg-white m-4 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           {mode === "Edit" && (
             <div className="flex-1 flex flex-col p-6 min-h-0">
@@ -141,6 +168,7 @@ export function NoteEditor() {
                 className="flex-1 w-full resize-none border-none outline-none focus:ring-0 p-0 text-slate-700 font-mono text-base leading-relaxed placeholder-slate-400 focus:outline-none"
               ></textarea>
 
+              {/* Визуальный индикатор статуса синхронизации на базе вычисляемого isTyping */}
               {isTyping && (
                 <div className="flex justify-end items-center space-x-2 text-xs text-slate-400 font-mono pt-3 border-t border-slate-100">
                   <span className="inline-block w-2 h-2 bg-amber-400 rounded-full animate-pulse"></span>
@@ -156,6 +184,8 @@ export function NoteEditor() {
             </div>
           )}
 
+          {/* Режим предпросмотра: безопасный рендер HTML (защита от XSS вшита внутрь parseMarkdown).
+              Стилизация дочерних тегов (h1-h3, strong, button) задана через произвольные селекторы Tailwind [&>tag]. */}
           {mode === "Preview" && (
             <div
               className="flex-1 overflow-y-auto p-8 text-slate-600 leading-relaxed space-y-4

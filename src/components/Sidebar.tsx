@@ -9,10 +9,17 @@ interface SidebarProps {
   onChangeTab: (tab: "editor" | "graph") => void;
 }
 
+/**
+ * Боковая панель навигации и списка заметок.
+ * Обернута в React.memo: компонент не будет лишний раз перерисовываться,
+ * если в App.tsx изменится состояние, не влияющее на currentTab или onChangeTab.
+ */
 export const Sidebar = memo(function Sidebar({
   currentTab,
   onChangeTab,
 }: SidebarProps) {
+  // Точечные селекторы Zustand: подписываемся только на нужные поля и экшены,
+  // чтобы изменения в dependencies (графе связей) не вызывали ререндер сайдбара.
   const notes = useNotes((state) => state.notes);
   const deleteNote = useNotes((state) => state.deleteNote);
   const activeNodeId = useNotes((state) => state.activeNoteId);
@@ -20,22 +27,28 @@ export const Sidebar = memo(function Sidebar({
   const createNote = useNotes((state) => state.createNote);
   const isLoadingNotes = useNotes((state) => state.isLoadingNotes);
 
+  // Хранит ID заметки, чью ссылку только что скопировали (для смены иконки 📋 -> ✅ на 1.5 сек)
   const [copied, setCopied] = useState("");
 
+  // Копирует UUID заметки в буфер обмена для вставки вики-ссылок [[ID]]
   async function handleCopyNoteId(
     event: React.MouseEvent<HTMLButtonElement, MouseEvent>,
     id: string,
   ): Promise<void> {
+    // Обязательно останавливаем всплытие (stopPropagation), иначе клик по кнопке
+    // провалится в родительскую карточку и переключит активную заметку.
     event.stopPropagation();
     await navigator.clipboard.writeText(id);
     setCopied(id);
     setTimeout(() => setCopied(""), 1500);
   }
 
+  // Удаление заметки по клику на корзину
   function handleRemoveNote(
     event: React.MouseEvent<HTMLButtonElement, MouseEvent>,
     id: string,
   ): void {
+    // Останавливаем всплытие, чтобы не открыть удаляемую заметку в редакторе
     event.stopPropagation();
     deleteNote(id);
   }
@@ -48,6 +61,7 @@ export const Sidebar = memo(function Sidebar({
     onChangeTab("graph");
   }
 
+  // Выбор заметки из списка: делаем её активной и принудительно открываем вкладку редактора
   function handleNoteClick(
     event: React.MouseEvent<HTMLDivElement, MouseEvent>,
     id: string,
@@ -57,11 +71,14 @@ export const Sidebar = memo(function Sidebar({
     onChangeTab("editor");
   }
 
+  // Создание новой заметки (оптимистично добавляется в стор и сразу открывается в редакторе)
   function handleCreate(): void {
     onChangeTab("editor");
     createNote();
   }
 
+  // Выход из аккаунта: Supabase удалит токен сессии, а слушатель onAuthStateChange
+  // в App.tsx поймает это событие и автоматически вернет экран логина <Auth />.
   async function handleLogout() {
     const { error } = await supabase.auth.signOut();
   }
@@ -69,6 +86,7 @@ export const Sidebar = memo(function Sidebar({
   return (
     <>
       <div className="w-72 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col h-full select-none">
+        {/* Шапка сайдбара с кнопкой создания новой заметки */}
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
           <span className="font-bold text-slate-700 tracking-tight">
             Мои заметки
@@ -82,6 +100,7 @@ export const Sidebar = memo(function Sidebar({
           </button>
         </div>
 
+        {/* Переключатель экранов (Редактор / Граф связей) */}
         <div className="p-3 border-b border-slate-100">
           <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl">
             <button
@@ -100,7 +119,11 @@ export const Sidebar = memo(function Sidebar({
             </button>
           </div>
         </div>
+
+        {/* Прокручиваемая область списка заметок */}
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {/* Точечный скелетон загрузки (Progressive Loading):
+              показывается только на месте списка, пока fetchNotes() тянет данные из Supabase */}
           {isLoadingNotes && (
             <div className="flex overflow-hidden bg-slate-50 select-none">
               {/* Скелетон левой панели (Sidebar) */}
@@ -123,6 +146,8 @@ export const Sidebar = memo(function Sidebar({
               
             </div>
           )}
+
+          {/* Реальный список заметок после завершения загрузки */}
           {!isLoadingNotes &&
             notes.map((note) => (
               <div
@@ -140,6 +165,8 @@ export const Sidebar = memo(function Sidebar({
                   </div>
                 </div>
 
+                {/* Панель быстрых действий (копировать ID, удалить):
+                    скрыта по умолчанию и плавно появляется при наведении курсора на строку (group-hover) */}
                 <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   {copied !== note.id && (
                     <button
@@ -174,6 +201,8 @@ export const Sidebar = memo(function Sidebar({
               </div>
             ))}
         </div>
+
+        {/* Футер боковой панели с кнопкой выхода из аккаунта (mt-auto прижимает блок к низу) */}
         <div className="p-3 border-t border-slate-100 mt-auto">
           <button
             type="button"
