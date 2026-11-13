@@ -214,18 +214,15 @@ export const useNotes = create<NotesState>((set, get) => ({
       toNoteId: link,
     }));
 
-    const validNewDeps  = newDeps.filter(
-            (dep) =>
-              dep.fromNoteId !== dep.toNoteId &&
-              get().notes.some((note) => note.id === dep.toNoteId),
-          )
+    const validNewDeps = newDeps.filter(
+      (dep) =>
+        dep.fromNoteId !== dep.toNoteId &&
+        get().notes.some((note) => note.id === dep.toNoteId),
+    );
 
     set((state) => {
       return {
-        dependencies: [
-          ...deps,
-          ...validNewDeps,
-        ],
+        dependencies: [...deps, ...validNewDeps],
         notes: state.notes.map((note: Note) =>
           note.id === id ? { ...note, content, updatedAt: now } : note,
         ),
@@ -246,7 +243,7 @@ export const useNotes = create<NotesState>((set, get) => ({
         .eq("from_note_id", id);
 
       // 3. Если есть новые валидные связи (validNewDeps), вставляем их в базу
-       let insError = null;
+      let insError = null;
       if (validNewDeps.length > 0) {
         ({ error: insError } = await supabase.from("dependencies").insert(
           validNewDeps.map((dep) => ({
@@ -265,9 +262,9 @@ export const useNotes = create<NotesState>((set, get) => ({
       }
     } catch (error) {
       set({
-          notes: prevNotes,
-          dependencies: prevDependencies,
-        });
+        notes: prevNotes,
+        dependencies: prevDependencies,
+      });
     }
   },
 
@@ -302,4 +299,8 @@ export const useNotes = create<NotesState>((set, get) => ({
       });
     }
   },
+
+  handleRealtimeNote: (payload) => {
+
+  }
 }));
