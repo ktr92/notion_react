@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // src/store/useNotes.ts
 import { create } from "zustand";
 import { extractLinks } from "../utils/mdLinks";
+import { supabase } from "../lib/supabase";
 
 interface NotesState {
   notes: Note[];
@@ -16,6 +18,8 @@ interface NotesState {
   // Принимает ID, удаляет заметку из массива. Если удаляемая заметка была активной — сбрасывает activeNoteId в null.
   deleteNote: (id: string) => void;
   dependencies: Dependency[];
+  isLoadingNotes: boolean;
+  fetchNotes: () => Promise<void>;
 }
 
 interface Note {
@@ -31,7 +35,7 @@ interface Dependency {
   toNoteId: Note["id"];
 }
 
-const INITIAL_NOTES = [
+/* const INITIAL_NOTES = [
   {
     id: "1",
     title: "первая ",
@@ -53,9 +57,9 @@ const INITIAL_NOTES = [
     createdAt: Date.now(),
     updatedAt: Date.now(),
   },
-];
+]; */
 
-const DEPS: Dependency[] = INITIAL_NOTES.flatMap((note) => {
+/* const DEPS: Dependency[] = INITIAL_NOTES.flatMap((note) => {
   const links = extractLinks(note.content);
   const noteDeps: Dependency[] = links.map((link) => ({
     fromNoteId: note.id,
@@ -69,13 +73,56 @@ const DEPS: Dependency[] = INITIAL_NOTES.flatMap((note) => {
   );
 
   return filtered;
-});
+}); */
 
-export const useNotes = create<NotesState>((set) => ({
-  notes: INITIAL_NOTES,
-  dependencies: DEPS,
+export const useNotes = create<NotesState>((set, get) => ({
+  notes: [],
+  dependencies: [],
+  isLoadingNotes: false,
+  activeNoteId: null,
+  fetchNotes: async () => {
+    set({ isLoadingNotes: true });
 
-  activeNoteId: "1",
+    try {
+      const getNotes = supabase
+        .from("notes")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      const getDependencies = supabase.from("dependencies").select("*");
+
+      const [notes, dependencies] = await Promise.all([
+        getNotes,
+        getDependencies,
+      ]);
+      let formattedNotes: Note[] = [];
+      let formattedDependencies: Dependency[] = [];
+
+      if (notes.data) {
+        formattedNotes = notes.data.map((row) => ({
+          id: row.id,
+          title: row.title,
+          content: row.content,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }));
+      }
+      if (dependencies.data) {
+        formattedDependencies = dependencies.data.map((row) => ({
+          fromNoteId: row.from_note_id,
+          toNoteId: row.to_note_id,
+        }));
+      }
+      set({
+        notes: formattedNotes,
+        dependencies: formattedDependencies,
+      });
+    } catch (error) {
+      console.log(error)
+    } finally {
+      set({ isLoadingNotes: false });
+    }
+  },
   // Создает новую заметку с уникальным ID, дефолтным заголовком и пустым текстом. Добавляет её в список и сразу делает активной (activeNoteId).
   createNote: () =>
     set((state) => {
