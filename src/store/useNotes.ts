@@ -125,13 +125,15 @@ export const useNotes = create<NotesState>((set, get) => ({
   },
   // Создает новую заметку с уникальным ID, дефолтным заголовком и пустым текстом. Добавляет её в список и сразу делает активной (activeNoteId).
   createNote: async () => {
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session) return;
     const id = crypto.randomUUID();
     const now = Date.now();
 
     const prevNotes = get().notes;
-    const prevActiveId = get().activeNoteId
+    const prevActiveId = get().activeNoteId;
 
     const newNote = {
       id,
@@ -160,51 +162,144 @@ export const useNotes = create<NotesState>((set, get) => ({
         set({ notes: prevNotes, activeNoteId: prevActiveId });
       }
     } catch (error) {
-      set({ notes: prevNotes, activeNoteId: prevActiveId  });
-      console.log(error)
+      set({ notes: prevNotes, activeNoteId: prevActiveId });
+      console.log(error);
     }
   },
 
   // Принимает ID заметки и переключает на неё фокус редактора.
   setActiveNoteId: (id: string) => set(() => ({ activeNoteId: id })),
   // Принимает ID и новую строку. Находит нужную заметку, обновляет ей заголовок и поле updatedAt.
-  updateNoteTitle: (id: string, title: string) =>
+  updateNoteTitle: async (id: string, title: string) => {
+    const prevNotes = get().notes;
+
     set((state) => ({
       notes: state.notes.map((note: Note) =>
         note.id === id ? { ...note, title, updatedAt: Date.now() } : note,
       ),
-    })),
-  // Принимает ID и новый текст. Находит нужную заметку, обновляет текст Markdown и поле updatedAt.
-  updateNoteContent: (id: string, content: string) =>
-    set((state) => {
-      const links = extractLinks(content);
-      const deps = state.dependencies.filter((dep) => dep.fromNoteId !== id);
-      const newDeps: Dependency[] = links.map((link) => ({
-        fromNoteId: id,
-        toNoteId: link,
-      }));
+    }));
 
+    try {
+      const { error } = await supabase
+        .from("notes")
+        .update({ title, updated_at: Date.now() })
+        .eq("id", id);
+      if (error) {
+        set({
+          notes: prevNotes,
+        });
+      }
+    } catch (error) {
+      set({
+        notes: prevNotes,
+      });
+    }
+  },
+
+  // Принимает ID и новый текст. Находит нужную заметку, обновляет текст Markdown и поле updatedAt.
+  updateNoteContent: async (id: string, content: string) => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) return;
+
+    const prevNotes = get().notes;
+    const prevDependencies = get().dependencies;
+
+    const now = Date.now();
+    const links = extractLinks(content);
+    const deps = get().dependencies.filter((dep) => dep.fromNoteId !== id);
+    const newDeps: Dependency[] = links.map((link) => ({
+      fromNoteId: id,
+      toNoteId: link,
+    }));
+
+    const validNewDeps  = newDeps.filter(
+            (dep) =>
+              dep.fromNoteId !== dep.toNoteId &&
+              get().notes.some((note) => note.id === dep.toNoteId),
+          )
+
+    set((state) => {
       return {
         dependencies: [
           ...deps,
-          ...newDeps.filter(
-            (dep) =>
-              dep.fromNoteId !== dep.toNoteId &&
-              state.notes.some((note) => note.id === dep.toNoteId),
-          ),
+          ...validNewDeps,
         ],
         notes: state.notes.map((note: Note) =>
-          note.id === id ? { ...note, content, updatedAt: Date.now() } : note,
+          note.id === id ? { ...note, content, updatedAt: now } : note,
         ),
       };
-    }),
+    });
+
+    try {
+      // 1. Обновляем текст заметки
+      const { error: noteError } = await supabase
+        .from("notes")
+        .update({ content, updated_at: now })
+        .eq("id", id);
+
+      // 2. Удаляем старые исходящие связи этой заметки
+      const { error: delError } = await supabase
+        .from("dependencies")
+        .delete()
+        .eq("from_note_id", id);
+
+      // 3. Если есть новые валидные связи (validNewDeps), вставляем их в базу
+       let insError = null;
+      if (validNewDeps.length > 0) {
+        ({ error: insError } = await supabase.from("dependencies").insert(
+          validNewDeps.map((dep) => ({
+            user_id: session.user.id,
+            from_note_id: dep.fromNoteId,
+            to_note_id: dep.toNoteId,
+          })),
+        ));
+      }
+
+      if (noteError || delError || insError) {
+        set({
+          notes: prevNotes,
+          dependencies: prevDependencies,
+        });
+      }
+    } catch (error) {
+      set({
+          notes: prevNotes,
+          dependencies: prevDependencies,
+        });
+    }
+  },
+
   // Принимает ID, удаляет заметку из массива. Если удаляемая заметка была активной — сбрасывает activeNoteId в null.
-  deleteNote: (id: string) =>
+  deleteNote: async (id: string) => {
+    const prevNotes = get().notes;
+    const prevDependencies = get().dependencies;
+    const prevActiveId = get().activeNoteId;
+
     set((state) => ({
       activeNoteId: state.activeNoteId === id ? null : state.activeNoteId,
       notes: state.notes.filter((note) => note.id !== id),
       dependencies: state.dependencies.filter(
         (dep) => dep.fromNoteId !== id && dep.toNoteId !== id,
       ),
-    })),
+    }));
+
+    try {
+      const { error } = await supabase.from("notes").delete().eq("id", id);
+      if (error) {
+        set({
+          notes: prevNotes,
+          dependencies: prevDependencies,
+          activeNoteId: prevActiveId,
+        });
+      }
+    } catch (error) {
+      set({
+        notes: prevNotes,
+        dependencies: prevDependencies,
+        activeNoteId: prevActiveId,
+      });
+    }
+  },
 }));
