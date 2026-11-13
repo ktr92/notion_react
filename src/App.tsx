@@ -6,10 +6,39 @@ import { NoteEditor } from "./components/NoteEditor";
 import { useNotes } from "./store/useNotes";
 import { useEffect, useState } from "react";
 import { KnowledgeGraph } from "./components/KnowledgeGraph";
+import type { Session } from "@supabase/supabase-js/dist/index.cjs";
+import { supabase } from "./lib/supabase";
+import { Auth } from "./components/Auth";
 
 function App() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+
   const activeNoteId = useNotes((state) => state.activeNoteId);
   const [tab, setTab] = useState<"editor" | "graph">("editor");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function getSession() {
+      if (isMounted) {
+        const { data } = await supabase.auth.getSession();
+        setSession(data?.session ?? null);
+        setIsLoadingAuth(false);
+      }
+    }
+    getSession();
+
+    const { data } = supabase.auth.onAuthStateChange((_, session) => {
+      setSession(session);
+      setIsLoadingAuth(false);
+    });
+
+    return () => {
+      isMounted = false;
+      data.subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     function hashSync() {
@@ -55,7 +84,8 @@ function App() {
 
   return (
     <>
-      <div className="flex h-screen w-screen overflow-hidden bg-slate-100 text-slate-800 font-sans antialiased">
+      {!isLoadingAuth && !session && <Auth />}
+      {session && <div className="flex h-screen w-screen overflow-hidden bg-slate-100 text-slate-800 font-sans antialiased">
         <aside className="w-72 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col">
           <Sidebar currentTab={tab} onChangeTab={setTab} />
         </aside>
@@ -64,7 +94,9 @@ function App() {
           {tab === "editor" && <NoteEditor key={activeNoteId} />}
           {tab === "graph" && <KnowledgeGraph onChangeTab={setTab} />}
         </main>
-      </div>
+      </div>}
+      
+      
     </>
   );
 }

@@ -16,7 +16,11 @@ interface Drag {
   hasMoved: boolean;
 }
 
-export const KnowledgeGraph = function ({ onChangeTab }) {
+export const KnowledgeGraph = function ({
+  onChangeTab,
+}: {
+  onChangeTab: (tab: "editor" | "graph") => void;
+}) {
   const notes = useNotes((state) => state.notes);
   const dependencies = useNotes((state) => state.dependencies);
   const setActiveNoteId = useNotes((state) => state.setActiveNoteId);
@@ -36,7 +40,10 @@ export const KnowledgeGraph = function ({ onChangeTab }) {
 
   const dragRef = useRef<Drag | null>(null);
 
-  function handlePointerDown(event: React.PointerEvent<HTMLDivElement>, noteId: string) {
+  function handlePointerDown(
+    event: React.PointerEvent<HTMLDivElement>,
+    noteId: string,
+  ) {
     dragRef.current = {
       noteId: noteId,
       startX: event.clientX,
@@ -48,47 +55,71 @@ export const KnowledgeGraph = function ({ onChangeTab }) {
     nodeRefs.current[noteId]?.setPointerCapture(event.pointerId);
   }
 
-  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>, noteId: string) {
-    if (!dragRef.current || !dragRef.current.noteId) return;
+  function handlePointerMove(
+    event: React.PointerEvent<HTMLDivElement>,
+    noteId: string,
+  ) {
+    if (!dragRef.current || !dragRef.current.noteId || dragRef.current.noteId !== noteId) return;
+    if (!nodeRefs.current[noteId]) return;
+
     const dx = event.clientX - dragRef.current.startX;
     const dy = event.clientY - dragRef.current.startY;
     if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
       dragRef.current.hasMoved = true;
     }
-      const newX = dx + dragRef.current.initialNodeX;
-      const newY = dy + dragRef.current.initialNodeY;
+    const newX = dx + dragRef.current.initialNodeX;
+    const newY = dy + dragRef.current.initialNodeY;
 
-      coordsRef.current[noteId].x = newX;
-      coordsRef.current[noteId].y = newY;
+    coordsRef.current[noteId].x = newX;
+    coordsRef.current[noteId].y = newY;
 
-      nodeRefs.current[noteId].style.transform =
-        `translate3d(${newX}px, ${newY}px, 0)`;
+    nodeRefs.current[noteId].style.transform =
+      `translate3d(${newX}px, ${newY}px, 0)`;
 
-      dependencies.forEach((dep) => {
-        if (dep.fromNoteId === noteId) {
-          edgeRefs.current[`${dep.fromNoteId}-${dep.toNoteId}`]?.setAttribute("x1", String(newX + 80));
-          edgeRefs.current[`${dep.fromNoteId}-${dep.toNoteId}`]?.setAttribute("y1", String(newY + 24));
-        }
-        if (dep.toNoteId === noteId) {
-          edgeRefs.current[`${dep.fromNoteId}-${dep.toNoteId}`]?.setAttribute("x2", String(newX + 80));
-          edgeRefs.current[`${dep.fromNoteId}-${dep.toNoteId}`]?.setAttribute("y2", String(newY + 24));
-        }
-      });
-    
+    dependencies.forEach((dep) => {
+      if (dep.fromNoteId === noteId) {
+        edgeRefs.current[`${dep.fromNoteId}-${dep.toNoteId}`]?.setAttribute(
+          "x1",
+          String(newX + 80),
+        );
+        edgeRefs.current[`${dep.fromNoteId}-${dep.toNoteId}`]?.setAttribute(
+          "y1",
+          String(newY + 24),
+        );
+      }
+      if (dep.toNoteId === noteId) {
+        edgeRefs.current[`${dep.fromNoteId}-${dep.toNoteId}`]?.setAttribute(
+          "x2",
+          String(newX + 80),
+        );
+        edgeRefs.current[`${dep.fromNoteId}-${dep.toNoteId}`]?.setAttribute(
+          "y2",
+          String(newY + 24),
+        );
+      }
+    });
   }
 
-  function handlePointerUp(event: React.PointerEvent<HTMLDivElement>, noteId: string) {
+  function handlePointerUp(
+    event: React.PointerEvent<HTMLDivElement>,
+    noteId: string,
+  ) {
+    if (!dragRef.current || !dragRef.current.noteId) return;
     nodeRefs.current[noteId]?.releasePointerCapture(event.pointerId);
-    dragRef.current.noteId = null;
     if (!dragRef.current?.hasMoved) {
       setActiveNoteId(noteId);
-      onChangeTab('editor')
+      onChangeTab("editor");
     }
+    dragRef.current = null;
+  }
+
+  function handlePointerCancel() {
+    dragRef.current = null;
   }
 
   return (
     <>
-      <div className="relative w-full h-full overflow-hidden bg-slate-50 select-none">
+      <div className="relative w-full h-full overflow-hidden bg-slate-50 select-none ">
         <svg className="absolute inset-0 w-full h-full pointer-events-none">
           {dependencies.map((dep) => {
             const edgeKey = `${dep.fromNoteId}-${dep.toNoteId}`;
@@ -114,7 +145,7 @@ export const KnowledgeGraph = function ({ onChangeTab }) {
         {notes.map((note) => (
           <div
             key={note.id}
-            className="absolute top-0 left-0 w-40 h-12 bg-white border border-slate-200 rounded-xl shadow-sm px-3 flex items-center justify-center text-sm font-medium text-slate-700 truncate cursor-grab active:cursor-grabbing hover:border-indigo-400 transition-colors z-10"
+            className="absolute top-0 left-0 w-40 h-12 bg-white border border-slate-200 rounded-xl shadow-sm px-3 flex items-center justify-center text-sm font-medium text-slate-700 truncate cursor-grab active:cursor-grabbing hover:border-indigo-400 transition-colors z-10 touch-none"
             style={{
               transform: `translate3d(${coordsRef.current[note.id].x}px, ${coordsRef.current[note.id].y}px, 0)`,
             }}
@@ -124,6 +155,7 @@ export const KnowledgeGraph = function ({ onChangeTab }) {
             onPointerDown={(e) => handlePointerDown(e, note.id)}
             onPointerMove={(e) => handlePointerMove(e, note.id)}
             onPointerUp={(e) => handlePointerUp(e, note.id)}
+            onPointerCancel={handlePointerCancel}
           >
             {note.title}
           </div>

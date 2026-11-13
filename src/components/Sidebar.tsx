@@ -2,6 +2,7 @@
 
 import { memo, useState } from "react";
 import { useNotes } from "../store/useNotes";
+import { supabase } from "../lib/supabase";
 
 interface SidebarProps {
   currentTab: "editor" | "graph";
@@ -58,6 +59,10 @@ export const Sidebar = memo(function Sidebar({
   function handleCreate(): void {
     onChangeTab("editor");
     createNote();
+  }
+
+  async function handleLogout() {
+    const { error } = await supabase.auth.signOut();
   }
 
   return (
@@ -144,6 +149,15 @@ export const Sidebar = memo(function Sidebar({
               </div>
             </div>
           ))}
+        </div>
+         <div className="p-3 border-t border-slate-100 mt-auto">
+          <button
+            type="button"
+            className="w-full py-2 px-3 text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer"
+            onClick={handleLogout}
+          >
+            <span>Выйти из аккаунта</span>
+          </button>
         </div>
       </div>
     </>
