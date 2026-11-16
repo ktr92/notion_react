@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { parseMarkdown } from "../utils/mdParser";
 import { useNotes } from "../store/useNotes";
+import { createPortal } from "react-dom";
+import { getLinkTriggerState } from "../utils/mdLinks";
 
 /**
  * Компонент редактора и предпросмотра заметок.
@@ -24,7 +26,6 @@ export function NoteEditor() {
   const [prevCloudTitle, setPrevCloudTitle] = useState(note?.title);
   const [prevCloudText, setPrevCloudText] = useState(note?.content);
 
-
   // Режим отображения: "Edit" (редактирование) или "Preview" (рендер HTML из Markdown)
   const [mode, setMode] = useState<"Edit" | "Preview">("Edit");
 
@@ -36,14 +37,17 @@ export function NoteEditor() {
 
   // Вычисляемое состояние (Derived State): true, пока локальный текст отличается от сохраненного в сторе
   const [isTyping, setIsTyping] = useState(false);
-  
-  if (note && (note.title !== prevCloudTitle || note?.content !== prevCloudText)) {
-    setPrevCloudTitle(note.title)
-    setPrevCloudText(note.content)
+
+  if (
+    note &&
+    (note.title !== prevCloudTitle || note?.content !== prevCloudText)
+  ) {
+    setPrevCloudTitle(note.title);
+    setPrevCloudText(note.content);
 
     if (!isTyping) {
-      setTitle(note.title)
-      setContent(note.content)
+      setTitle(note.title);
+      setContent(note.content);
     }
   }
 
@@ -52,11 +56,12 @@ export function NoteEditor() {
   };
   const handleChangeTitle = (e: React.ChangeEvent<HTMLInputElement>) => {
     setTitle(e.target.value);
-    setIsTyping(true)
+    setIsTyping(true);
   };
   const handleChangeText = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(e.target.value);
-    setIsTyping(true)
+    setCursorPos(e.currentTarget.selectionStart);
+    setIsTyping(true);
   };
   const handlePreview = () => {
     setMode("Preview");
@@ -97,7 +102,7 @@ export function NoteEditor() {
         if (content !== note?.content) {
           saveContent(noteId!, content);
         }
-        setIsTyping(false)
+        setIsTyping(false);
       }, 500);
     }
 
@@ -106,16 +111,33 @@ export function NoteEditor() {
     };
   }, [title, content]);
 
-  //  внешними изменениями заметки
+  const portalTarget = document.getElementById(
+    "sidebar-link-autocomplete-slot",
+  );
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [cursorPos, setCursorPos] = useState<number | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  function handleChangeCursor(
+    e: React.MouseEvent<HTMLTextAreaElement, MouseEvent>,
+  ): void {
+    setCursorPos(e.currentTarget.selectionStart);
+  }
  
+
+  const trigger = getLinkTriggerState(content, cursorPos);
+
   // Заглушка на случай, если заметка не выбрана или была удалена
   if (!noteId) {
-    return <div className="p-4">Такой заметки нет... Создайте новую заметку.</div>;
+    return (
+      <div className="p-4">Такой заметки нет... Создайте новую заметку.</div>
+    );
   }
 
   return (
     <>
-      <div className="flex flex-col h-full bg-slate-50 text-slate-800 font-sans antialiased">
+      <div className="flex flex-col h-full bg-slate-50 text-slate-800 font-sans antialiased relative">
         {/* Верхняя панель редактора: поле заголовка и переключатель режимов Edit / Preview */}
         <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3 shadow-sm">
           <input
@@ -180,12 +202,16 @@ export function NoteEditor() {
         <div className="flex-1 flex flex-col min-h-0 bg-white m-4 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           {mode === "Edit" && (
             <div className="flex-1 flex flex-col p-6 min-h-0">
-              <textarea
-                value={content}
-                onChange={handleChangeText}
-                placeholder="Начните писать здесь в формате Markdown..."
-                className="flex-1 w-full resize-none border-none outline-none focus:ring-0 p-0 text-slate-700 font-mono text-base leading-relaxed placeholder-slate-400 focus:outline-none"
-              ></textarea>
+              <div className="relative flex-1 flex flex-col min-h-0">
+                <textarea
+                  value={content}
+                  onChange={(e) => handleChangeText(e)}
+                  onClick={(e) => handleChangeCursor(e)}
+                  onKeyUp={(e) => handleChangeCursor(e)}
+                  placeholder="Начните писать здесь в формате Markdown..."
+                  className="flex-1 w-full resize-none border-none outline-none focus:ring-0 p-0 text-slate-700 font-mono text-base leading-relaxed placeholder-slate-400 focus:outline-none"
+                ></textarea>
+              </div>
 
               {/* Визуальный индикатор статуса синхронизации на базе вычисляемого isTyping */}
               {isTyping && (
@@ -221,6 +247,49 @@ export function NoteEditor() {
           )}
         </div>
       </div>
+
+      {trigger.isOpen && portalTarget &&
+        createPortal(
+          <div
+            // Клик по тёмному фону закрывает меню автокомплита (вызови здесь свой сброс cursorPos / закрытие)
+            className="absolute inset-0 z-30 bg-slate-900/25 flex flex-col justify-start p-3 pt-28 animate-fadeIn"
+          >
+            {/* Останавливаем всплытие клика (e.stopPropagation()), чтобы клик по самой карточке не закрывал её как бекдроп */}
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="w-full bg-white border border-indigo-200 rounded-xl overflow-hidden shadow-xl"
+            >
+              <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between text-[11px] font-semibold text-indigo-700">
+                <span>🔗 Выберите заметку</span>
+                <span className="font-normal text-indigo-500">
+                  ↑↓ · Enter · Esc
+                </span>
+              </div>
+
+              <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 bg-white">
+                {/* Если совпадений нет */}
+                <div className="px-3 py-4 text-xs text-slate-400 text-center">
+                  Заметки не найдены
+                </div>
+
+                {/* Элемент списка подсказок */}
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2.5 flex items-center justify-between transition-colors bg-indigo-50/90 text-indigo-700"
+                  // Для невыбранного пункта: "hover:bg-slate-50 text-slate-700"
+                >
+                  <span className="text-xs font-medium truncate pr-2">
+                    Название заметки
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400 flex-shrink-0">
+                    {/* note.id.slice(0, 6) */}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>,
+          portalTarget,
+        )}
     </>
   );
 }

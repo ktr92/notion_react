@@ -109,7 +109,7 @@ export const Sidebar = memo(function Sidebar({
 
   return (
     <>
-      <div className="w-72 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col h-full select-none">
+      <div className="w-72 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col h-full select-none relative ">
         {/* Шапка сайдбара с кнопкой создания новой заметки */}
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
           <span className="font-bold text-slate-700 tracking-tight">
@@ -143,6 +143,11 @@ export const Sidebar = memo(function Sidebar({
             </button>
           </div>
         </div>
+
+
+        {/* Слот для портала автокомплита вики-ссылок из NoteEditor */}
+        <div id="sidebar-link-autocomplete-slot" />
+
 
         <div className="px-3 pt-3">
           <div className="relative">

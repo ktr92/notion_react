@@ -29,3 +29,44 @@ export function extractLinks(text: string): string[] {
   // в графе связей не появятся дублирующиеся линии и не упадет PRIMARY KEY в базе.
   return Array.from(new Set(rawIds));
 }
+
+export interface LinkTriggerState {
+  isOpen: boolean;
+  query: string;
+  startIndex: number; // Позиция символов "[[" в общем тексте
+}
+
+// принимает полный текст и номер позиции курсора, а возвращает готовый объект с ответами на вопросы: открыто ли меню, какой сейчас поисковый запрос и с какого индекса нужно будет заменить текст при вставке.
+export function getLinkTriggerState(
+  text: string,
+  cursorPos: number | null
+): LinkTriggerState {
+  if (cursorPos === null) {
+    return { isOpen: false, query: "", startIndex: -1 };
+  }
+
+  // Берем только текст слева от курсора
+  const textBeforeCursor = text.slice(0, cursorPos);
+
+  const lastOpenIndex = textBeforeCursor.lastIndexOf("[[");
+  const lastCloseIndex = textBeforeCursor.lastIndexOf("]]");
+
+  // Если открывающих скобок нет или они уже закрыты до курсора — меню закрыто
+  if (lastOpenIndex === -1 || lastOpenIndex < lastCloseIndex) {
+    return { isOpen: false, query: "", startIndex: -1 };
+  }
+
+  // Текст, который пользователь успел набрать после "[["
+  const queryAfterBrackets = textBeforeCursor.slice(lastOpenIndex + 2);
+
+  // Если между "[[" и курсором есть перенос строки — считаем, что ссылка не завершена
+  if (queryAfterBrackets.includes("\n")) {
+    return { isOpen: false, query: "", startIndex: -1 };
+  }
+
+  return {
+    isOpen: true,
+    query: queryAfterBrackets.trim().toLowerCase(),
+    startIndex: lastOpenIndex,
+  };
+}
