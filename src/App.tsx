@@ -26,6 +26,7 @@ function App() {
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
   const fetchNotes = useNotes(state => state.fetchNotes)
+  const resetStore = useNotes(state => state.resetStore)
   const activeNoteId = useNotes((state) => state.activeNoteId);
 
   // Локальный стейт переключения рабочих экранов ("Редактор" / "Граф связей")
@@ -61,7 +62,10 @@ function App() {
   // 2. Загрузка заметок и связей из облака при появлении или смене пользователя
   // (Подсказка: в будущем стоит обернуть вызов в `if (session?.user.id)`, чтобы не делать лишний запрос при выходе)
   useEffect(() => {
-    fetchNotes()
+    fetchNotes();
+    if (!session) {
+      resetStore()
+    }
   }, [fetchNotes, session?.user.id])
 
   // 3. Кастомный роутинг (Направление 1: URL -> Zustand).

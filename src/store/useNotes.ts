@@ -26,6 +26,7 @@ interface NotesState {
   dependencies: Dependency[];
   isLoadingNotes: boolean;
   fetchNotes: () => Promise<void>;
+  resetStore: () => void;
 }
 
 interface Note {
@@ -296,10 +297,73 @@ export const useNotes = create<NotesState>((set, get) => ({
     }
   },
 
+  resetStore: () => {
+    set({
+      notes: [],
+      dependencies: [],
+      activeNoteId: null,
+    });
+  },
+
   // Диспетчер входящих WebSocket-событий от Supabase Realtime (INSERT / UPDATE / DELETE из других вкладок/устройств).
   // Внутри должен маппить payload.new из snake_case в camelCase, игнорировать дубли при INSERT
   // и проверять incomingNote.updatedAt > localNote.updatedAt при UPDATE (защита от эхо-эффекта).
-  handleRealtimeNote: (payload) => {
+  handleRealtimeNote: (payload: { eventType: string; new: any; old: any }) => {
+    const incoming = payload.new;
+    const mapped = {
+      id: incoming.id,
+      title: incoming.title,
+      content: incoming.content,
+      createdAt: Number(incoming.created_at),
+      updatedAt: Number(incoming.updated_at),
+    };
+    const alreadyExists = get().notes.some((note) => note.id === incoming.id);
 
+    if (payload.eventType === "INSERT") {      
+      if (alreadyExists) return;
+
+      set((state) => ({
+        notes: [mapped, ...state.notes],
+      }));
+    }
+
+    if (payload.eventType === "UPDATE") {
+      if (!alreadyExists) return;
+      set((state) => ({
+        notes: state.notes.map((note: Note) =>
+          note.id === mapped.id && mapped.updatedAt > note.updatedAt ? { ...note, title: mapped.title, content: mapped.content, updatedAt: mapped.updatedAt } : note,
+        ),
+      }));
+    }
+    if (payload.eventType === "DELETE") {
+      if (!alreadyExists) return;
+      set((state) => ({
+        activeNoteId: payload.old.id === get().activeNoteId ? null : get().activeNoteId,
+        notes: state.notes.filter((note) => note.id !== payload.old.id),
+        
+      }))
+    }
+  },
+
+  handleRealtimeDependency: (payload: { eventType: string; new: any; old: any }) => {
+    const incoming = payload.new;
+    const mapped = {
+      fromNoteId: incoming.from_note_id,
+      toNoteId: incoming.to_note_id
+    };
+    const alreadyExists = get().notes.some((note) => note.id === incoming.id);
+
+    if (payload.eventType === "INSERT") {
+      if (alreadyExists) return;
+      set((state) => ({
+        dependencies: [mapped, ...state.dependencies],
+      }));
+    }
+    if (payload.eventType === "DELETE") {
+      if (!alreadyExists) return;
+      set((state) => ({
+        dependencies: state.dependencies.filter((dependency) => dependency.fromNoteId !== payload.old.fromNoteId && dependency.toNoteId !== payload.old.toNoteId)
+      }))
+    }
   }
 }));
