@@ -25,8 +25,12 @@ function App() {
   // чтобы избежать мелькания экрана логина <Auth /> при обновлении страницы авторизованным юзером.
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
-  const fetchNotes = useNotes(state => state.fetchNotes)
-  const resetStore = useNotes(state => state.resetStore)
+  const fetchNotes = useNotes((state) => state.fetchNotes);
+  const resetStore = useNotes((state) => state.resetStore);
+  const handleRealtimeDependency = useNotes(
+    (state) => state.handleRealtimeDependency,
+  );
+  const handleRealtimeNote = useNotes((state) => state.handleRealtimeNote);
   const activeNoteId = useNotes((state) => state.activeNoteId);
 
   // Локальный стейт переключения рабочих экранов ("Редактор" / "Граф связей")
@@ -48,6 +52,10 @@ function App() {
 
     // Слушатель событий входа, выхода и автоматического обновления JWT-токена
     const { data } = supabase.auth.onAuthStateChange((_, session) => {
+      if (!session) {
+        resetStore();
+      }
+
       setSession(session);
       setIsLoadingAuth(false);
     });
@@ -62,11 +70,37 @@ function App() {
   // 2. Загрузка заметок и связей из облака при появлении или смене пользователя
   // (Подсказка: в будущем стоит обернуть вызов в `if (session?.user.id)`, чтобы не делать лишний запрос при выходе)
   useEffect(() => {
+    if (!session?.user.id) return;
+
     fetchNotes();
-    if (!session) {
-      resetStore()
-    }
-  }, [fetchNotes, session?.user.id])
+
+    const channel = supabase
+      .channel("realtime-notes-sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notes" },
+        (payload) => {
+          handleRealtimeNote(payload);
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "dependencies" },
+        (payload) => {
+          handleRealtimeDependency(payload);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [
+    fetchNotes,
+    handleRealtimeDependency,
+    handleRealtimeNote,
+    session?.user.id,
+  ]);
 
   // 3. Кастомный роутинг (Направление 1: URL -> Zustand).
   // Читает хэш при первой загрузке страницы и при нажатии кнопок браузера "Назад / Вперед" (hashchange).
@@ -119,31 +153,33 @@ function App() {
   return (
     <>
       {/* Уровень шлюза 1: идет проверка сессии при старте */}
-      {isLoadingAuth && <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 select-none">
-      <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-3" />
-      <p className="text-sm font-medium text-slate-500 animate-pulse">
-        Проверка сессии...
-      </p>
-    </div>}
+      {isLoadingAuth && (
+        <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 select-none">
+          <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-3" />
+          <p className="text-sm font-medium text-slate-500 animate-pulse">
+            Проверка сессии...
+          </p>
+        </div>
+      )}
 
       {/* Уровень шлюза 2: пользователь не авторизован — показываем только форму входа/регистрации */}
       {!isLoadingAuth && !session && <Auth />}
 
       {/* Уровень шлюза 3: пользователь вошел — рендерим основное рабочее пространство */}
-      {session && <div className="flex h-screen w-screen overflow-hidden bg-slate-100 text-slate-800 font-sans antialiased">
-        <aside className="w-72 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col">
-          <Sidebar currentTab={tab} onChangeTab={setTab} />
-        </aside>
+      {session && (
+        <div className="flex h-screen w-screen overflow-hidden bg-slate-100 text-slate-800 font-sans antialiased">
+          <aside className="w-72 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col">
+            <Sidebar currentTab={tab} onChangeTab={setTab} />
+          </aside>
 
-        <main className="flex-1 flex flex-col min-w-0 h-full">
-          {/* Пропс key={activeNoteId} заставляет React пересоздавать NoteEditor при смене заметки,
+          <main className="flex-1 flex flex-col min-w-0 h-full">
+            {/* Пропс key={activeNoteId} заставляет React пересоздавать NoteEditor при смене заметки,
               сбрасывая его локальные стейты ввода без лишних useEffect */}
-          {tab === "editor" && <NoteEditor key={activeNoteId} />}
-          {tab === "graph" && <KnowledgeGraph onChangeTab={setTab} />}
-        </main>
-      </div>}
-      
-      
+            {tab === "editor" && <NoteEditor key={activeNoteId} />}
+            {tab === "graph" && <KnowledgeGraph onChangeTab={setTab} />}
+          </main>
+        </div>
+      )}
     </>
   );
 }

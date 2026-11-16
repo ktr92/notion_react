@@ -27,6 +27,8 @@ interface NotesState {
   isLoadingNotes: boolean;
   fetchNotes: () => Promise<void>;
   resetStore: () => void;
+  handleRealtimeDependency: (payload: { eventType: string; new: any; old: any }) => void;
+  handleRealtimeNote: (payload: { eventType: string; new: any; old: any }) => void;
 }
 
 interface Note {

@@ -21,6 +21,10 @@ export function NoteEditor() {
   const changeNote = useNotes((state) => state.setActiveNoteId);
   const notes = useNotes((state) => state.notes);
 
+  const [prevCloudTitle, setPrevCloudTitle] = useState(note?.title);
+  const [prevCloudText, setPrevCloudText] = useState(note?.content);
+
+
   // Режим отображения: "Edit" (редактирование) или "Preview" (рендер HTML из Markdown)
   const [mode, setMode] = useState<"Edit" | "Preview">("Edit");
 
@@ -31,16 +35,30 @@ export function NoteEditor() {
   const [content, setContent] = useState(note ? note.content : "");
 
   // Вычисляемое состояние (Derived State): true, пока локальный текст отличается от сохраненного в сторе
-  const isTyping = title !== note?.title || content !== note?.content;
+  const [isTyping, setIsTyping] = useState(false);
+
+
+  
+  if (note && (note.title !== prevCloudTitle || note?.content !== prevCloudText)) {
+    setPrevCloudTitle(note.title)
+    setPrevCloudText(note.content)
+
+    if (!isTyping) {
+      setTitle(note.title)
+      setContent(note.content)
+    }
+  }
 
   const handleEdit = () => {
     setMode("Edit");
   };
   const handleChangeTitle = (e: React.ChangeEvent<HTMLInputElement>) => {
     setTitle(e.target.value);
+    setIsTyping(true)
   };
   const handleChangeText = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(e.target.value);
+    setIsTyping(true)
   };
   const handlePreview = () => {
     setMode("Preview");
@@ -70,7 +88,7 @@ export function NoteEditor() {
   // Если пользователь продолжает печатать, cleanup-функция отменяет предыдущий таймер.
   // Отправка в Zustand (и далее в Supabase) происходит только через 0.5 сек после паузы в наборе текста.
   useEffect(() => {
-    if (!noteId) return;
+    if (!noteId || !isTyping) return;
 
     let timeout: ReturnType<typeof setTimeout>;
     if (title !== note?.title || content !== note?.content) {
@@ -81,6 +99,7 @@ export function NoteEditor() {
         if (content !== note?.content) {
           saveContent(noteId!, content);
         }
+        setIsTyping(false)
       }, 500);
     }
 
@@ -89,6 +108,8 @@ export function NoteEditor() {
     };
   }, [title, content]);
 
+  //  внешними изменениями заметки
+ 
   // Заглушка на случай, если заметка не выбрана или была удалена
   if (!noteId) {
     return <div className="p-4">Такой заметки нет... Создайте новую заметку.</div>;
