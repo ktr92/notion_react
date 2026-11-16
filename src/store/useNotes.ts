@@ -336,11 +336,11 @@ export const useNotes = create<NotesState>((set, get) => ({
       }));
     }
     if (payload.eventType === "DELETE") {
-      if (!alreadyExists) return;
       set((state) => ({
-        activeNoteId: payload.old.id === get().activeNoteId ? null : get().activeNoteId,
+        activeNoteId: payload.old.id === state.activeNoteId ? null : state.activeNoteId,
         notes: state.notes.filter((note) => note.id !== payload.old.id),
-        
+        dependencies: state.dependencies.filter((dependency) => dependency.fromNoteId !== payload.old.id && dependency.toNoteId !== payload.old.id)
+
       }))
     }
   },
@@ -351,7 +351,7 @@ export const useNotes = create<NotesState>((set, get) => ({
       fromNoteId: incoming.from_note_id,
       toNoteId: incoming.to_note_id
     };
-    const alreadyExists = get().notes.some((note) => note.id === incoming.id);
+    const alreadyExists = get().dependencies.some((dep) => dep.fromNoteId === mapped.fromNoteId && dep.toNoteId === mapped.toNoteId);
 
     if (payload.eventType === "INSERT") {
       if (alreadyExists) return;
@@ -360,9 +360,8 @@ export const useNotes = create<NotesState>((set, get) => ({
       }));
     }
     if (payload.eventType === "DELETE") {
-      if (!alreadyExists) return;
       set((state) => ({
-        dependencies: state.dependencies.filter((dependency) => dependency.fromNoteId !== payload.old.fromNoteId && dependency.toNoteId !== payload.old.toNoteId)
+        dependencies: state.dependencies.filter((dependency) => dependency.fromNoteId !== payload.old.from_note_id || dependency.toNoteId !== payload.old.to_note_id)
       }))
     }
   }
