@@ -36,8 +36,6 @@ export function NoteEditor() {
 
   // Вычисляемое состояние (Derived State): true, пока локальный текст отличается от сохраненного в сторе
   const [isTyping, setIsTyping] = useState(false);
-
-
   
   if (note && (note.title !== prevCloudTitle || note?.content !== prevCloudText)) {
     setPrevCloudTitle(note.title)
