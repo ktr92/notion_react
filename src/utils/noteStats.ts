@@ -1,3 +1,4 @@
+/* eslint-disable no-useless-escape */
 import { extractLinks } from "./mdLinks";
 
 export interface NoteStats {
