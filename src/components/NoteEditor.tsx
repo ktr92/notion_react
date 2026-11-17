@@ -4,6 +4,7 @@ import { useNotes, type Note } from "../store/useNotes";
 import { createPortal } from "react-dom";
 import { getLinkTriggerState } from "../utils/mdLinks";
 import { LinkAutocompletePortal } from "./LinkAutocompletePortal";
+import { getNoteStats } from './../utils/noteStats';
 
 /**
  * Компонент редактора и предпросмотра заметок.
@@ -158,14 +159,9 @@ export function NoteEditor() {
       });
     }
   }
+  const noteStats = useMemo(() => getNoteStats(content), [content])
 
-  // Заглушка на случай, если заметка не выбрана или была удалена
-  if (!noteId) {
-    return (
-      <div className="p-4">Такой заметки нет... Создайте новую заметку.</div>
-    );
-  }
-
+  
   function handleControlLinks(e: KeyboardEvent<HTMLTextAreaElement>): void {
     if (!trigger.isOpen) return;
 
@@ -196,6 +192,13 @@ export function NoteEditor() {
       e.preventDefault();
       setCursorPos(null);
     }
+  }
+
+  // Заглушка на случай, если заметка не выбрана или была удалена
+  if (!noteId) {
+    return (
+      <div className="p-4">Такой заметки нет... Создайте новую заметку.</div>
+    );
   }
 
   return (
@@ -277,19 +280,24 @@ export function NoteEditor() {
                 ></textarea>
               </div>
 
+            <div className=" flex justify-between items-center pt-3 border-t border-slate-100">
+              <div className="text-slate-400 text-xs">
+                {noteStats.wordsCount} слов · {noteStats.charsCount} симв. ·  ~{noteStats.readingTimeMinutes} мин  · 🔗 {noteStats.linksCount}   
+              </div>
               {/* Визуальный индикатор статуса синхронизации на базе вычисляемого isTyping */}
               {isTyping && (
-                <div className="flex justify-end items-center space-x-2 text-xs text-slate-400 font-mono pt-3 border-t border-slate-100">
+                <div className="flex justify-end items-center space-x-2 text-xs text-slate-400 font-mono">
                   <span className="inline-block w-2 h-2 bg-amber-400 rounded-full animate-pulse"></span>
                   <span>Печатает (ожидание сохранения...)</span>
                 </div>
               )}
               {!isTyping && (
-                <div className="flex justify-end items-center space-x-2 text-xs text-slate-400 font-mono pt-3 border-t border-slate-100">
+                <div className="flex justify-end items-center space-x-2 text-xs text-slate-400 font-mono">
                   <span className="inline-block w-2 h-2 bg-green-400 rounded-full"></span>
                   <span>Сохранено</span>
                 </div>
               )}
+            </div>
             </div>
           )}
 
