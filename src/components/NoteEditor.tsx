@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { parseMarkdown } from "../utils/mdParser";
-import { useNotes } from "../store/useNotes";
+import { useNotes, type Note } from "../store/useNotes";
 import { createPortal } from "react-dom";
 import { getLinkTriggerState } from "../utils/mdLinks";
+import { LinkAutocompletePortal } from "./LinkAutocompletePortal";
 
 /**
  * Компонент редактора и предпросмотра заметок.
@@ -25,6 +26,7 @@ export function NoteEditor() {
 
   const [prevCloudTitle, setPrevCloudTitle] = useState(note?.title);
   const [prevCloudText, setPrevCloudText] = useState(note?.content);
+  const [prevQuery, setPrevQuery] = useState("");
 
   // Режим отображения: "Edit" (редактирование) или "Preview" (рендер HTML из Markdown)
   const [mode, setMode] = useState<"Edit" | "Preview">("Edit");
@@ -111,28 +113,89 @@ export function NoteEditor() {
     };
   }, [title, content]);
 
-  const portalTarget = document.getElementById(
-    "sidebar-link-autocomplete-slot",
-  );
-
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [cursorPos, setCursorPos] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   function handleChangeCursor(
-    e: React.MouseEvent<HTMLTextAreaElement, MouseEvent>,
+    e: React.SyntheticEvent<HTMLTextAreaElement>,
   ): void {
     setCursorPos(e.currentTarget.selectionStart);
   }
- 
 
   const trigger = getLinkTriggerState(content, cursorPos);
+  let links: Note[] = [];
+  if (trigger.isOpen) {
+    links = notes.filter(
+      (n) =>
+        n.id !== noteId &&
+        n.title.toLowerCase().includes(trigger.query.toLowerCase()),
+    );
+  }
+
+  if (prevQuery !== trigger.query) {
+    setPrevQuery(trigger.query);
+    setSelectedIndex(0);
+  }
+
+  const notesTitlesMap = useMemo(() => Object.fromEntries(notes.map((n) => [n.id, n.title])), [notes]);
+
+  function insertLink(targetNoteId: string, targetNoteTitle: string) {
+    if (trigger.isOpen && cursorPos !== null) {
+      const safeTitle = targetNoteTitle.trim() || "Без названия";
+
+      const newText =
+        content.slice(0, trigger.startIndex) +
+        `[[${safeTitle}|${targetNoteId}]]` +
+        content.slice(cursorPos);
+      const nextCursor = trigger.startIndex + safeTitle.length + targetNoteId.length + 5;
+      setContent(newText);
+      setIsTyping(true);
+      setCursorPos(null);
+      window.requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+        textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
+      });
+    }
+  }
 
   // Заглушка на случай, если заметка не выбрана или была удалена
   if (!noteId) {
     return (
       <div className="p-4">Такой заметки нет... Создайте новую заметку.</div>
     );
+  }
+
+  function handleControlLinks(e: KeyboardEvent<HTMLTextAreaElement>): void {
+    if (!trigger.isOpen) return;
+
+    const key = e.key;
+    if (key === "ArrowDown") {
+      e.preventDefault();
+      if (links.length > 0) {
+        setSelectedIndex(
+          selectedIndex + 1 < links.length ? selectedIndex + 1 : 0,
+        );
+      }
+    }
+    if (key === "ArrowUp") {
+      e.preventDefault();
+      if (links.length > 0) {
+        setSelectedIndex(
+          selectedIndex - 1 >= 0 ? selectedIndex - 1 : links.length - 1,
+        );
+      }
+    }
+    if (key === "Enter" || key === "Tab") {
+      e.preventDefault();
+      if (links.length > 0) {
+        insertLink(links[selectedIndex].id, links[selectedIndex].title);
+      }
+    }
+    if (key === "Escape") {
+      e.preventDefault();
+      setCursorPos(null);
+    }
   }
 
   return (
@@ -207,7 +270,8 @@ export function NoteEditor() {
                   value={content}
                   onChange={(e) => handleChangeText(e)}
                   onClick={(e) => handleChangeCursor(e)}
-                  onKeyUp={(e) => handleChangeCursor(e)}
+                  onKeyDown={(e) => handleControlLinks(e)}
+                  ref={textareaRef}
                   placeholder="Начните писать здесь в формате Markdown..."
                   className="flex-1 w-full resize-none border-none outline-none focus:ring-0 p-0 text-slate-700 font-mono text-base leading-relaxed placeholder-slate-400 focus:outline-none"
                 ></textarea>
@@ -241,54 +305,18 @@ export function NoteEditor() {
                 [&>strong]:font-semibold [&>strong]:text-slate-600
                 [&>br]:mb-2
                 [&_button]:text-blue-500"
-              dangerouslySetInnerHTML={{ __html: parseMarkdown(content) }}
+              dangerouslySetInnerHTML={{ __html: parseMarkdown(content, notesTitlesMap) }}
               onClick={handlePreviewClick}
             ></div>
           )}
         </div>
       </div>
 
-      {trigger.isOpen && portalTarget &&
+      {trigger.isOpen &&
+        document.getElementById("sidebar-link-autocomplete-slot") &&
         createPortal(
-          <div
-            // Клик по тёмному фону закрывает меню автокомплита (вызови здесь свой сброс cursorPos / закрытие)
-            className="absolute inset-0 z-30 bg-slate-900/25 flex flex-col justify-start p-3 pt-28 animate-fadeIn"
-          >
-            {/* Останавливаем всплытие клика (e.stopPropagation()), чтобы клик по самой карточке не закрывал её как бекдроп */}
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="w-full bg-white border border-indigo-200 rounded-xl overflow-hidden shadow-xl"
-            >
-              <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between text-[11px] font-semibold text-indigo-700">
-                <span>🔗 Выберите заметку</span>
-                <span className="font-normal text-indigo-500">
-                  ↑↓ · Enter · Esc
-                </span>
-              </div>
-
-              <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 bg-white">
-                {/* Если совпадений нет */}
-                <div className="px-3 py-4 text-xs text-slate-400 text-center">
-                  Заметки не найдены
-                </div>
-
-                {/* Элемент списка подсказок */}
-                <button
-                  type="button"
-                  className="w-full text-left px-3 py-2.5 flex items-center justify-between transition-colors bg-indigo-50/90 text-indigo-700"
-                  // Для невыбранного пункта: "hover:bg-slate-50 text-slate-700"
-                >
-                  <span className="text-xs font-medium truncate pr-2">
-                    Название заметки
-                  </span>
-                  <span className="text-[10px] font-mono text-slate-400 flex-shrink-0">
-                    {/* note.id.slice(0, 6) */}
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>,
-          portalTarget,
+          <LinkAutocompletePortal isOpen={trigger.isOpen} links={links} selectedIndex={selectedIndex} onSelect={insertLink} onClose={() => setCursorPos(null)}  />,
+          document.getElementById("sidebar-link-autocomplete-slot")!,
         )}
     </>
   );

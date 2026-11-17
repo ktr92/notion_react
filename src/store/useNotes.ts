@@ -31,7 +31,7 @@ interface NotesState {
   handleRealtimeNote: (payload: { eventType: string; new: any; old: any }) => void;
 }
 
-interface Note {
+export interface Note {
   id: string;
   title: string;
   content: string;

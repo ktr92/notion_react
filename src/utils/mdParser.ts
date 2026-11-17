@@ -1,7 +1,10 @@
 /* eslint-disable no-useless-escape */
 // src/utils/mdParser.ts
 
-export function parseMarkdown(text: string): string {
+export function parseMarkdown(
+  text: string,
+  notesTitlesMap?: Record<string, string>,
+): string {
   // Экранируем HTML спецсимволы (защита от XSS)
   let html = text
     .replaceAll(/&/g, "&amp;")
@@ -40,11 +43,25 @@ export function parseMarkdown(text: string): string {
   // Меняем оставшиеся \n на <br />
   html = html.replace(/\n/g, "<br />");
 
-  // Парсим вики-ссылки [[ID]]
-  html = html.replaceAll(
-    /\[\[([^\[\]]+)\]\]/gm,
-    "<button data-note-id='$1'>$1</button>",
-  );
+  // Парсим вики-ссылки: поддерживаем как новый формат [[Название|ID]], так и старый [[ID]]
+  html = html.replaceAll(/\[\[([^\[\]]+)\]\]/gm, (_, rawContent: string) => {
+    const trimmed = rawContent.trim();
+    const pipeIndex = trimmed.lastIndexOf("|");
+
+    let targetId = trimmed;
+    let fallbackLabel = trimmed;
+
+    if (pipeIndex !== -1) {
+      fallbackLabel = trimmed.slice(0, pipeIndex).trim();
+      targetId = trimmed.slice(pipeIndex + 1).trim();
+    }
+
+    // Если передан словарь актуальных названий { [id]: title }, берем свежее название оттуда
+    const displayTitle =
+      notesTitlesMap?.[targetId] || fallbackLabel || "Без названия";
+
+    return `<button type="button" data-note-id="${targetId}" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-medium text-sm transition-colors cursor-pointer">${displayTitle}</button>`;
+  });
 
   // Возвращаем инлайн-код и блоки кода на место
   html = html.replace(
