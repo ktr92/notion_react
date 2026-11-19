@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { getLinkTriggerState } from "../utils/mdLinks";
 import { LinkAutocompletePortal } from "./LinkAutocompletePortal";
 import { getNoteStats } from './../utils/noteStats';
+import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 
 /**
  * Компонент редактора и предпросмотра заметок.
@@ -40,6 +41,7 @@ export function NoteEditor() {
 
   // Вычисляемое состояние (Derived State): true, пока локальный текст отличается от сохраненного в сторе
   const [isTyping, setIsTyping] = useState(false);
+  useUnsavedChangesWarning(isTyping)
 
   if (
     note &&

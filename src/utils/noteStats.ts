@@ -1,4 +1,3 @@
-/* eslint-disable no-useless-escape */
 import { extractLinks } from "./mdLinks";
 
 export interface NoteStats {
@@ -13,8 +12,8 @@ export function getNoteStats(markdownText: string): NoteStats {
   const filteredLinks = extractLinks(markdownText);
 
   const cleanedText = markdownText
-    .replaceAll(/\[\[([^\[\]]+)\|([^\[\]]+)\]\]/gm, "$1")
-    .replaceAll(/\[\[([^\[\]]+)\]\]/gm, "")
+    .replaceAll(/\[\[([^[\]]+)\|([^[\]]+)\]\]/gm, "$1")
+    .replaceAll(/\[\[([^[\]]+)\]\]/gm, "")
     .replaceAll(/^#{1,6}\s+/gm, "")
     .replaceAll("**", "");
 
