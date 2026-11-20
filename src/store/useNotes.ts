@@ -39,7 +39,7 @@ export interface Note {
   updatedAt: number;
 }
 
-interface Dependency {
+export interface Dependency {
   fromNoteId: Note["id"];
   toNoteId: Note["id"];
 }
