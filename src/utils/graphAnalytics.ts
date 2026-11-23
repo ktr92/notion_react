@@ -15,16 +15,17 @@ export function analyzeKnowledgeGraph(
   links: Dependency[],
 ): GraphAnalytics {
   const linkMap = new Map<string, number>();
+  const validNoteIds = new Set(notes.map((n) => n.id))
 
   links.forEach((link) => {
-    if (notes.find((n) => n.id === link.fromNoteId)) {
+    if (validNoteIds.has(link.fromNoteId) && validNoteIds.has(link.toNoteId)) {
       const currentFromt = linkMap.get(link.fromNoteId) ?? 0;
       linkMap.set(link.fromNoteId, currentFromt + 1);
-    }
-    if (notes.find((n) => n.id === link.toNoteId)) {
+
       const currentTo = linkMap.get(link.toNoteId) ?? 0;
       linkMap.set(link.toNoteId, currentTo + 1);
     }
+    
   });
 
   const orphans = notes.filter((n) => !linkMap.has(n.id));
