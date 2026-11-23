@@ -2,6 +2,7 @@
 import { useRef } from "react";
 import { useNotes } from "../store/useNotes";
 import { analyzeKnowledgeGraph } from "../utils/graphAnalytics";
+import { useMemo } from 'react';
 
 interface Coordinates {
   x: number;
@@ -157,13 +158,13 @@ export const KnowledgeGraph = function ({
     dragRef.current = null;
   }
 
-  const stats = analyzeKnowledgeGraph(notes, dependencies);
+  const stats = useMemo(() => analyzeKnowledgeGraph(notes, dependencies), [notes, dependencies]);
 
   return (
     <>
       <div className="relative w-full h-full overflow-hidden bg-slate-50 select-none ">
         <div>Без связей: {stats.orphans.length}</div>
-        <div>🔥 Топ-связи: {stats.topHubs.map((h, idx) => `${idx}. ${h.note.title} (${h.connectionsCount}) `)}</div>
+        <div>🔥 Топ-связи: {stats.topHubs.map((h, idx) => `${idx + 1}. ${h.note.title} (${h.connectionsCount}) `)}</div>
          
         {/* Нижний слой: векторный холст для отрисовки линий связей (pointer-events-none пропускает клики сквозь себя к карточкам) */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none">

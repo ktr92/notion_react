@@ -19,8 +19,8 @@ export function analyzeKnowledgeGraph(
 
   links.forEach((link) => {
     if (validNoteIds.has(link.fromNoteId) && validNoteIds.has(link.toNoteId)) {
-      const currentFromt = linkMap.get(link.fromNoteId) ?? 0;
-      linkMap.set(link.fromNoteId, currentFromt + 1);
+      const currentFrom = linkMap.get(link.fromNoteId) ?? 0;
+      linkMap.set(link.fromNoteId, currentFrom + 1);
 
       const currentTo = linkMap.get(link.toNoteId) ?? 0;
       linkMap.set(link.toNoteId, currentTo + 1);
