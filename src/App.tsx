@@ -10,19 +10,8 @@ import type { Session } from "@supabase/supabase-js/";
 import { supabase } from "./lib/supabase";
 import { Auth } from "./components/Auth";
 
-/**
- * Корневой компонент-оркестратор приложения.
- * Отвечает за три глобальные задачи:
- * 1. Жизненный цикл сессии авторизации Supabase (шлюз доступа).
- * 2. Загрузку облачных данных при входе в аккаунт.
- * 3. Двустороннюю синхронизацию URL-хэша (#note-uuid) с активной заметкой в Zustand.
- */
 function App() {
-  // Состояние текущей сессии пользователя (null — гость, объект Session — авторизован)
   const [session, setSession] = useState<Session | null>(null);
-
-  // Флаг первичной проверки токена в localStorage: блокирует рендер на пару десятков мс,
-  // чтобы избежать мелькания экрана логина <Auth /> при обновлении страницы авторизованным юзером.
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
   const fetchNotes = useNotes((state) => state.fetchNotes);
@@ -33,12 +22,12 @@ function App() {
   const handleRealtimeNote = useNotes((state) => state.handleRealtimeNote);
   const activeNoteId = useNotes((state) => state.activeNoteId);
 
-  // Локальный стейт переключения рабочих экранов ("Редактор" / "Граф связей")
   const [tab, setTab] = useState<"editor" | "graph">("editor");
 
-  // 1. Подписка на авторизацию Supabase (запускается один раз при монтировании приложения)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // 1. Подписка на авторизацию Supabase
   useEffect(() => {
-    // Флаг защиты от утечки памяти и обновления стейта после размонтирования (актуально для React StrictMode)
     let isMounted = true;
 
     async function getSession() {
@@ -50,7 +39,6 @@ function App() {
     }
     getSession();
 
-    // Слушатель событий входа, выхода и автоматического обновления JWT-токена
     const { data } = supabase.auth.onAuthStateChange((_, session) => {
       if (!session) {
         resetStore();
@@ -60,15 +48,13 @@ function App() {
       setIsLoadingAuth(false);
     });
 
-    // Cleanup-функция: отписываемся от слушателя при размонтировании компонента
     return () => {
       isMounted = false;
       data.subscription.unsubscribe();
     };
   }, []);
 
-  // 2. Загрузка заметок и связей из облака при появлении или смене пользователя
-  // (Подсказка: в будущем стоит обернуть вызов в `if (session?.user.id)`, чтобы не делать лишний запрос при выходе)
+  // 2. Загрузка заметок и связей из облака
   useEffect(() => {
     if (!session?.user.id) return;
 
@@ -102,16 +88,14 @@ function App() {
     session?.user.id,
   ]);
 
-  // 3. Кастомный роутинг (Направление 1: URL -> Zustand).
-  // Читает хэш при первой загрузке страницы и при нажатии кнопок браузера "Назад / Вперед" (hashchange).
+  // 3. Кастомный роутинг (Направление 1: URL -> Zustand)
   useEffect(() => {
     function hashSync() {
       const hash = window.location.hash;
       const isnote = hash.startsWith("#note-");
 
       if (isnote) {
-        const noteId = hash.slice(6); // Отрезаем префикс "#note-"
-        // Читаем стор напрямую через getState(), чтобы не переподписывать useEffect на каждый рендер
+        const noteId = hash.slice(6);
         const store = useNotes.getState();
         const isexist = store.notes.some((note) => note.id === noteId);
         if (isexist) {
@@ -119,7 +103,6 @@ function App() {
             store.setActiveNoteId(noteId);
           }
         } else {
-          // Если в URL передан несуществующий или удаленный ID — тихо очищаем битый хэш без перезагрузки
           window.history.replaceState(
             null,
             "",
@@ -135,8 +118,7 @@ function App() {
     return () => window.removeEventListener("hashchange", hashSync);
   }, []);
 
-  // 4. Кастомный роутинг (Направление 2: Zustand -> URL).
-  // Обновляет адресную строку браузера при клике на заметку в сайдбаре, графе или по вики-ссылке.
+  // 4. Кастомный роутинг (Направление 2: Zustand -> URL)
   useEffect(() => {
     if (!activeNoteId) {
       window.history.replaceState(
@@ -154,7 +136,7 @@ function App() {
     <>
       {/* Уровень шлюза 1: идет проверка сессии при старте */}
       {isLoadingAuth && (
-        <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 select-none">
+        <div className="h-[100dvh] w-screen flex flex-col items-center justify-center bg-slate-50 select-none pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
           <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-3" />
           <p className="text-sm font-medium text-slate-500 animate-pulse">
             Проверка сессии...
@@ -162,21 +144,71 @@ function App() {
         </div>
       )}
 
-      {/* Уровень шлюза 2: пользователь не авторизован — показываем только форму входа/регистрации */}
+      {/* Уровень шлюза 2: пользователь не авторизован */}
       {!isLoadingAuth && !session && <Auth />}
 
-      {/* Уровень шлюза 3: пользователь вошел — рендерим основное рабочее пространство */}
+      {/* Уровень шлюза 3: пользователь вошел */}
       {session && (
-        <div className="flex h-screen w-screen overflow-hidden bg-slate-100 text-slate-800 font-sans antialiased">
-          <aside className="w-72 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col">
-            <Sidebar currentTab={tab} onChangeTab={setTab} />
+        <div className="relative flex h-[100dvh] w-screen overflow-hidden bg-slate-100 text-slate-800 font-sans antialiased pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+          {/* Затемняющая подложка (Backdrop) на мобильных экранах при открытом меню */}
+          {isMobileMenuOpen === true && (
+            <div
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 z-30 bg-slate-900/40 backdrop-blur-[1px] transition-opacity md:hidden"
+              aria-hidden="true"
+            />
+          )}
+
+          {/* Выдвижной сайдбар на мобильных (fixed) и статичный на десктопе (md:static) */}
+          <aside
+            className={`fixed inset-y-0 left-0 z-40 w-72 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] transition-transform duration-200 ease-out md:static md:translate-x-0 md:pt-0 md:pb-0 ${
+              isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+            }`}
+          >
+            <Sidebar
+              currentTab={tab}
+              onChangeTab={setTab}
+              onCloseMobileMenu={() => setIsMobileMenuOpen(false)}
+            />
           </aside>
 
+          {/* Основная рабочая область */}
           <main className="flex-1 flex flex-col min-w-0 h-full">
-            {/* Пропс key={activeNoteId} заставляет React пересоздавать NoteEditor при смене заметки,
-              сбрасывая его локальные стейты ввода без лишних useEffect */}
-            {tab === "editor" && <NoteEditor key={activeNoteId} />}
-            {tab === "graph" && <KnowledgeGraph onChangeTab={setTab} />}
+            {/* Мобильная верхняя шапка с кнопкой открытия сайдбара (видна только на < 768px) */}
+            <header className="h-12 flex-shrink-0 bg-white border-b border-slate-200 px-3 flex items-center justify-between md:hidden">
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen(true)}
+                className="p-2 -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg active:scale-95 transition-all"
+                aria-label="Открыть меню заметок"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
+                </svg>
+              </button>
+
+              <span className="text-sm font-semibold text-slate-700 tracking-tight">
+                {tab === "editor" ? "Редактор заметок" : "Граф связей"}
+              </span>
+
+              {/* Пустой блок для визуального центрирования заголовка */}
+              <div className="w-8" />
+            </header>
+
+            <div className="flex-1 min-h-0 flex flex-col">
+              {tab === "editor" && <NoteEditor key={activeNoteId} />}
+              {tab === "graph" && <KnowledgeGraph onChangeTab={setTab} />}
+            </div>
           </main>
         </div>
       )}

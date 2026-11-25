@@ -167,7 +167,7 @@ export const KnowledgeGraph = function ({
         <div>🔥 Топ-связи: {stats.topHubs.map((h, idx) => `${idx + 1}. ${h.note.title} (${h.connectionsCount}) `)}</div>
          
         {/* Нижний слой: векторный холст для отрисовки линий связей (pointer-events-none пропускает клики сквозь себя к карточкам) */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none">
+        <svg className="absolute inset-0 w-full h-full pointer-events-none touch-none">
           {dependencies.map((dep) => {
             const edgeKey = `${dep.fromNoteId}-${dep.toNoteId}`;
             const from = coordsRef.current[dep.fromNoteId] ?? { x: 0, y: 0 };

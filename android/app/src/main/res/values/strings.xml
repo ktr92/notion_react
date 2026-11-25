@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">notion_react</string>
+    <string name="title_activity_main">notion_react</string>
+    <string name="package_name">com.notes.organizer</string>
+    <string name="custom_url_scheme">com.notes.organizer</string>
+</resources>
