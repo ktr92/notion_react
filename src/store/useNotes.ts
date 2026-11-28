@@ -27,8 +27,17 @@ interface NotesState {
   isLoadingNotes: boolean;
   fetchNotes: () => Promise<void>;
   resetStore: () => void;
-  handleRealtimeDependency: (payload: { eventType: string; new: any; old: any }) => void;
-  handleRealtimeNote: (payload: { eventType: string; new: any; old: any }) => void;
+  handleRealtimeDependency: (payload: {
+    eventType: string;
+    new: any;
+    old: any;
+  }) => void;
+  handleRealtimeNote: (payload: {
+    eventType: string;
+    new: any;
+    old: any;
+  }) => void;
+  
 }
 
 export interface Note {
@@ -37,6 +46,9 @@ export interface Note {
   content: string;
   createdAt: number;
   updatedAt: number;
+  is_pinned: boolean;
+  category: string | null;
+  position: number;
 }
 
 export interface Dependency {
@@ -80,6 +92,9 @@ export const useNotes = create<NotesState>((set, get) => ({
           content: row.content,
           createdAt: row.created_at,
           updatedAt: row.updated_at,
+          category: row.category ?? null,
+          is_pinned: row.is_pinned ?? false,
+          position: row.position ?? row.created_at,
         }));
       }
       if (dependencies.data) {
@@ -122,6 +137,9 @@ export const useNotes = create<NotesState>((set, get) => ({
       content: "",
       createdAt: now,
       updatedAt: now,
+      position: now,
+      is_pinned: false,
+      category: null,
     };
 
     // 2. Optimistic UI: мгновенно добавляем карточку в стор и переключаем фокус (0 мс)
@@ -139,6 +157,9 @@ export const useNotes = create<NotesState>((set, get) => ({
         content: newNote.content,
         created_at: newNote.createdAt,
         updated_at: newNote.updatedAt,
+        is_pinned: newNote.is_pinned ?? false,
+        category: newNote.category ?? null,
+        position: newNote.position ?? newNote.createdAt,
       });
       // 4. Rollback: если база отклонила вставку, возвращаем стор к исходному снимку
       if (error) {
@@ -264,6 +285,29 @@ export const useNotes = create<NotesState>((set, get) => ({
     }
   },
 
+  
+  setNoteCategory(id: string, category: string | null) {
+    set((state) => ({
+      notes: state.notes.map((note: Note) =>
+        note.id === id ? { ...note, category } : note,
+      ),
+    }));
+  },
+  reorderNote(id: string, newPosition: number, newCategory?: string | null) {
+     set((state) => ({
+      notes: state.notes.map((note: Note) =>
+        note.id === id ? { ...note, category: newCategory !== undefined ? newCategory : note.category, position: newPosition } : note,
+      ),
+    }));
+  },
+  togglePinNote(id: string) {
+    set((state) => ({
+      notes: state.notes.map((note: Note) =>
+        note.id === id ? { ...note, is_pinned: !note.is_pinned } : note,
+      ),
+    }));
+  },
+
   // Принимает ID, удаляет заметку из массива. Если удаляемая заметка была активной — сбрасывает activeNoteId в null.
   deleteNote: async (id: string) => {
     // 1. Снимки всех трех полей, которые затрагивает удаление
@@ -321,7 +365,7 @@ export const useNotes = create<NotesState>((set, get) => ({
     };
     const alreadyExists = get().notes.some((note) => note.id === incoming.id);
 
-    if (payload.eventType === "INSERT") {      
+    if (payload.eventType === "INSERT") {
       if (alreadyExists) return;
 
       set((state) => ({
@@ -333,27 +377,46 @@ export const useNotes = create<NotesState>((set, get) => ({
       if (!alreadyExists) return;
       set((state) => ({
         notes: state.notes.map((note: Note) =>
-          note.id === mapped.id && mapped.updatedAt > note.updatedAt ? { ...note, title: mapped.title, content: mapped.content, updatedAt: mapped.updatedAt } : note,
+          note.id === mapped.id && mapped.updatedAt > note.updatedAt
+            ? {
+                ...note,
+                title: mapped.title,
+                content: mapped.content,
+                updatedAt: mapped.updatedAt,
+              }
+            : note,
         ),
       }));
     }
     if (payload.eventType === "DELETE") {
       set((state) => ({
-        activeNoteId: payload.old.id === state.activeNoteId ? null : state.activeNoteId,
+        activeNoteId:
+          payload.old.id === state.activeNoteId ? null : state.activeNoteId,
         notes: state.notes.filter((note) => note.id !== payload.old.id),
-        dependencies: state.dependencies.filter((dependency) => dependency.fromNoteId !== payload.old.id && dependency.toNoteId !== payload.old.id)
-
-      }))
+        dependencies: state.dependencies.filter(
+          (dependency) =>
+            dependency.fromNoteId !== payload.old.id &&
+            dependency.toNoteId !== payload.old.id,
+        ),
+      }));
     }
   },
 
-  handleRealtimeDependency: (payload: { eventType: string; new: any; old: any }) => {
+  handleRealtimeDependency: (payload: {
+    eventType: string;
+    new: any;
+    old: any;
+  }) => {
     const incoming = payload.new;
     const mapped = {
       fromNoteId: incoming.from_note_id,
-      toNoteId: incoming.to_note_id
+      toNoteId: incoming.to_note_id,
     };
-    const alreadyExists = get().dependencies.some((dep) => dep.fromNoteId === mapped.fromNoteId && dep.toNoteId === mapped.toNoteId);
+    const alreadyExists = get().dependencies.some(
+      (dep) =>
+        dep.fromNoteId === mapped.fromNoteId &&
+        dep.toNoteId === mapped.toNoteId,
+    );
 
     if (payload.eventType === "INSERT") {
       if (alreadyExists) return;
@@ -363,8 +426,13 @@ export const useNotes = create<NotesState>((set, get) => ({
     }
     if (payload.eventType === "DELETE") {
       set((state) => ({
-        dependencies: state.dependencies.filter((dependency) => dependency.fromNoteId !== payload.old.from_note_id || dependency.toNoteId !== payload.old.to_note_id)
-      }))
+        dependencies: state.dependencies.filter(
+          (dependency) =>
+            dependency.fromNoteId !== payload.old.from_note_id ||
+            dependency.toNoteId !== payload.old.to_note_id,
+        ),
+      }));
     }
-  }
+  },
+
 }));
